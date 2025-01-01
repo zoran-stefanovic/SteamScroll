@@ -1,0 +1,3 @@
+This plugin for the Streamdeck + lets you scroll through your installed Steam games and launch them with the press of the dial. 
+
+Prerequisites: For this plugin to work, the Steam base installation must be on your C: drive in the default location (C:\Program Files (x86)\Steam). Your game libraries can be spread over other disks or locations, this does not matter as long as the main Steam application in installed in previously named location. 

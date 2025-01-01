@@ -1,0 +1,54 @@
+{
+    "$schema": "https://schemas.elgato.com/streamdeck/plugins/layout.json",
+    "id": "GameWheelLayout",
+    "items": [
+        {
+            "key": "prevGameIcon",
+            "type": "pixmap",
+            "rect": [10, 20, 40, 40],
+            "opacity": 0.6,
+            "zOrder": 1
+        },
+        {
+            "key": "prevGameTitle",
+            "type": "text",
+            "rect": [10, 70, 40, 20],
+            "font": { "size": 10, "weight": 400 },
+            "alignment": "center",
+            "color": "#FFFFFF",
+            "zOrder": 2
+        },
+        {
+            "key": "currentGameIcon",
+            "type": "pixmap",
+            "rect": [80, 10, 60, 60],
+            "opacity": 1,
+            "zOrder": 2
+        },
+        {
+            "key": "currentGameTitle",
+            "type": "text",
+            "rect": [80, 70, 60, 20],
+            "font": { "size": 14, "weight": 600 },
+            "alignment": "center",
+            "color": "#FFFFFF",
+            "zOrder": 3
+        },
+        {
+            "key": "nextGameIcon",
+            "type": "pixmap",
+            "rect": [150, 20, 40, 40],
+            "opacity": 0.6,
+            "zOrder": 1
+        },
+        {
+            "key": "nextGameTitle",
+            "type": "text",
+            "rect": [150, 70, 40, 20],
+            "font": { "size": 10, "weight": 400 },
+            "alignment": "center",
+            "color": "#FFFFFF",
+            "zOrder": 2
+        }
+    ]
+}
