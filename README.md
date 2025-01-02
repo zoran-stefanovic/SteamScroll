@@ -9,3 +9,8 @@ The plugin works on the dial/touchbar part of the Stream Deck +, the touchbar di
 
 
 Note: You can have games installed in multiple locations/drives, but you need to have the base Steam install in the default folder (C:\Program Files (x86)\Steam) in order for the plugin to read installed games and icons. 
+
+
+Install:
+1. Download latest release.
+2. Double-click and Streamdeck software should add it automatically.
