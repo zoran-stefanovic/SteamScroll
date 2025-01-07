@@ -21,7 +21,7 @@ async function fetchIconFromLocalCache(appId: string): Promise<string | null> {
         return null;
     }
 }
-
+ 
 interface SteamGame {
     name: string;
     appid: string;
