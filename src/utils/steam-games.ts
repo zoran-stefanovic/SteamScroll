@@ -1,13 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { SteamAppInfoFetcher } from './SteamAppInfoFetcher';
+import { SteamGameWithType } from "./types";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const logger = console; // Replace with your actual logger
-const steamLibraryCachePath = "C:\\Program Files (x86)\\Steam\\appcache\\librarycache"; // Adjust the path if needed
+const steamLibraryCachePath = "C:\\Program Files (x86)\\Steam\\appcache\\librarycache";
 
 async function fetchIconFromLocalCache(appId: string): Promise<string | null> {
     const iconFilePath = path.join(steamLibraryCachePath, `${appId}_icon.jpg`);
@@ -21,12 +22,7 @@ async function fetchIconFromLocalCache(appId: string): Promise<string | null> {
         return null;
     }
 }
- 
-interface SteamGame {
-    name: string;
-    appid: string;
-    icon: string | null;
-}
+
 
 
 function getLibraryPaths(): string[] {
@@ -78,10 +74,20 @@ function getInstalledGames(): { appid: string; name: string }[] {
     return installedGames;
 }
 
-export async function getSteamGames(): Promise<SteamGame[]> {
+export async function getSteamGamesWithTypes(): Promise<SteamGameWithType[]> {
     try {
         const installedGames = getInstalledGames();
-        const steamGames: SteamGame[] = [];
+        const fetcher = new SteamAppInfoFetcher();
+        const appInfoPath = "C:/Program Files (x86)/Steam/appcache/appinfo.vdf";
+
+        const appInfo = await fetcher.fetchAppInfo(appInfoPath);
+
+        const appInfoMap = new Map<string, string>();
+        for (const app of appInfo) {
+            appInfoMap.set(app.appId.toString(), app.type);
+        }
+
+        const steamGames: SteamGameWithType[] = [];
 
         for (const game of installedGames) {
             const iconBase64 = await fetchIconFromLocalCache(game.appid);
@@ -89,7 +95,8 @@ export async function getSteamGames(): Promise<SteamGame[]> {
             steamGames.push({
                 name: game.name,
                 appid: game.appid,
-                icon: iconBase64,
+                icon: iconBase64 || "", // Ensure `icon` is always a string
+                type: appInfoMap.get(game.appid) || "Unknown", // Ensure `type` is always a string
             });
         }
 

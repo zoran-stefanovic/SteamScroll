@@ -1,6 +1,6 @@
 {
 	"Name": "Steamscroll",
-	"Version": "1.1.0.0",
+	"Version": "2.0.0.0",
 	"Author": "Zoran Stefanovic",
 	"Actions": [
 		{
@@ -8,7 +8,7 @@
 			"UUID": "com.zstefanovic.steamscroll.dial",
 			"Tooltip": "Scroll through installed Steam games using the dial.",
 			"Icon": "imgs/actions/action_icon",
-			"PropertyInspectorPath": "ui/dial-game-selector.html",
+			"PropertyInspectorPath": "ui/settings.html",
 			"SupportedInMultiActions": true,
 			"Controllers": [
 				"Encoder"
@@ -27,18 +27,14 @@
 	],
 	"Category": "Steamscroll",
 	"CategoryIcon": "imgs/plugin/category_icon",
+	"Icon": "imgs/plugin/category_icon",
 	"CodePath": "bin/plugin.js",
 	"Description": "Use the dial to browse through Steam games and press the dial to launch them.",
-	
 	"SDKVersion": 2,
 	"Software": {
 		"MinimumVersion": "6.4"
 	},
 	"OS": [
-		{
-			"Platform": "mac",
-			"MinimumVersion": "10.15"
-		},
 		{
 			"Platform": "windows",
 			"MinimumVersion": "10"

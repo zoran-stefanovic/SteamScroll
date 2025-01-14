@@ -5,132 +5,184 @@ import streamDeck, {
     DialRotateEvent,
     DialDownEvent,
 } from "@elgato/streamdeck";
-import { exec } from "child_process";
-import { getSteamGames } from "../utils/steam-games"; // Adjust the path based on your project structure
-
+import { getSteamGamesWithTypes } from "../utils/steam-games";
+import { SteamGameWithType } from "../utils/types";
 const initlogger = streamDeck.logger.createScope("steamscroll");
 
 @action({ UUID: "com.zstefanovic.steamscroll.dial" })
 export class SteamScroll extends SingletonAction {
-    private async updateWheel(dialAction: any): Promise<void> {
-        const prevIndex = (this.currentIndex - 1 + this.installedGames.length) % this.installedGames.length;
-        const nextIndex = (this.currentIndex + 1) % this.installedGames.length;
+    private allGames: SteamGameWithType[] = [];
+    private filteredGames: SteamGameWithType[] = [];
+    private selectedFilters: string[] = ["Game", "Tool", "Application"]; // Default: all types
+    private currentIndex: number = 0; 
+    private currentDialAction: any = null; // Add this line
+    private isInitializing: boolean = false;
+
+    constructor() {
+        super();
+        this.initializeGames();
+    }
+
+    private async initializeGames(): Promise<void> {
+        try {
+            initlogger.info("Loading Steam games...");
+            if (this.currentDialAction) {
+                this.currentDialAction.setFeedback({
+                    currentGameTitle: { value: "Loading..." }
+                });
+            }
+
+            const games = await getSteamGamesWithTypes();
+            this.allGames = games;
+            
+            // Only apply filters after games are loaded
+            if (this.allGames.length > 0) {
+                this.applyFilters();
+                if (this.currentDialAction) {
+                    this.updateWheel(this.currentDialAction);
+                }
+            }
+
+        } catch (error) {
+            initlogger.error("Failed to initialize games:", error);
+            this.allGames = [];
+        }
+    }
     
-        const prevGame = this.installedGames[prevIndex];
-        const currentGame = this.installedGames[this.currentIndex];
-        const nextGame = this.installedGames[nextIndex];
+    private applyFilters(): void {
+        // Log the current filters
+        
+        initlogger.info("Selected filters:", this.selectedFilters);
     
-        // Set feedback
+        if (this.selectedFilters.length === 0) {
+            // No filters selected, show all games
+            this.filteredGames = this.allGames;
+        } else {
+            // Normalize filters to lowercase
+            const normalizedFilters = this.selectedFilters.map((filter) => filter.toLowerCase());
+            initlogger.debug("Normalized filters:", normalizedFilters);
+    
+            // Filter games based on selected filters
+            this.filteredGames = this.allGames.filter((game) => {
+                // Normalize game type for comparison
+                const gameType = game.type.toLowerCase();
+                const matchesFilter = normalizedFilters.includes(gameType);
+    
+                if (!matchesFilter) {
+                    initlogger.debug(`Filtered out game: ${game.name} (Type: ${game.type}, Normalized: ${gameType})`);
+                }
+    
+                return matchesFilter;
+            });
+        }
+    
+        // Log the filtered games
+        initlogger.info("Filtered games after applying filters:", this.filteredGames);
+    
+        // Reset index after applying filters
+        this.currentIndex = 0;
+    }
+    
+
+    private updateWheel(dialAction: any): void {
+        if (this.filteredGames.length === 0) {
+            dialAction.setFeedback({
+                currentGameTitle: { value: "No games available" },
+            });
+            return;
+        }
+
+        const prevIndex = (this.currentIndex - 1 + this.filteredGames.length) % this.filteredGames.length;
+        const nextIndex = (this.currentIndex + 1) % this.filteredGames.length;
+
+        const prevGame = this.filteredGames[prevIndex];
+        const currentGame = this.filteredGames[this.currentIndex];
+        const nextGame = this.filteredGames[nextIndex];
+
         dialAction.setFeedback({
             prevGameIcon: { value: prevGame.icon },
             prevGameTitle: { value: prevGame.name },
             currentGameIcon: { value: currentGame.icon },
             currentGameTitle: { value: currentGame.name },
             nextGameIcon: { value: nextGame.icon },
-            nextGameTitle: { value: nextGame.name }
+            nextGameTitle: { value: nextGame.name },
         });
-    }
-    
-    private installedGames: { appid: string; name: string; icon: string }[] = [];
-    private currentIndex: number = 0;
+    } 
 
-    constructor() {
-        super(); 
-        // Call the async initialization method
-        this.initializeGames();
-    }
+    override async onWillAppear(ev: WillAppearEvent): Promise<void> {
+        if (this.isInitializing) return;
+        this.isInitializing = true;
 
-    override onWillAppear(ev: WillAppearEvent): void | Promise<void> {
-        const dialAction = ev.action as any; // Use 'any' to bypass TypeScript issues
-    
-        if (this.installedGames.length === 0) {
-            // Set a loading indicator initially
-            dialAction.setFeedback({
-                currentGameTitle: { value: "Loading..." }
-            });
-    
-            // Wait for games to load and update the feedback
-            const updateFeedback = async () => {
-                while (this.installedGames.length === 0) {
-                    await new Promise(resolve => setTimeout(resolve, 100)); // Wait for loading
-                }
-    
-                // Once games are loaded, update the wheel layout
-                this.updateWheel(dialAction);
-            };
-    
-            updateFeedback();
-        } else {
-            // Games are already loaded, update the wheel layout
-            this.updateWheel(dialAction);
-        }
-    }
-    
+        this.currentDialAction = ev.action as any;
+        const dialAction = ev.action as any;
+        const settings = await ev.action.getSettings<{ filteroptions: string[] }>();
+        
+        dialAction.setFeedback({
+            currentGameTitle: { value: "Loading..." },
+        });
 
-    private async initializeGames(): Promise<void> {
-        try {
-            // Retrieve the list of Steam games
-            const games = await getSteamGames();
-    
-            // Map the result to ensure `icon` is always a string
-            this.installedGames = games.map(game => ({
-                appid: game.appid,
-                name: game.name,
-                icon: game.icon || "" // Provide a default value if `icon` is null
-            }));
-    
-            if (this.installedGames.length === 0) {
-                initlogger.warn("No Steam games found.");
-            } else {
-                initlogger.info("Installed games loaded:", this.installedGames);
-            }
-        } catch (error) {
-            initlogger.error("Failed to initialize SteamGames:", error);
-            this.installedGames = []; // Set an empty array to avoid issues
-        }
+        this.selectedFilters = settings?.filteroptions || [];
+        this.applyFilters();
+        this.updateWheel(dialAction);
+        
+        this.isInitializing = false;
     }
-    
 
     override async onDialRotate(event: DialRotateEvent): Promise<void> {
-        const ticks = event.payload.ticks;
-
-    if (this.installedGames.length === 0) {
-        initlogger.info("No games to scroll through.");
-        return;
-    }
-
-    // Update the current index based on dial rotation
-    if (ticks > 0) {
-        this.currentIndex = (this.currentIndex + 1) % this.installedGames.length;
-    } else if (ticks < 0) {
-        this.currentIndex = (this.currentIndex - 1 + this.installedGames.length) % this.installedGames.length;
-    }
-
-    // Update the wheel layout
-    const dialAction = event.action as any;
-    this.updateWheel(dialAction);
-    }
-
-    override async onDialDown(event: DialDownEvent): Promise<void> {
-        // Ensure there are games to launch
-        if (this.installedGames.length === 0) {
-            console.log("No games available to launch.");
-            await event.action.setTitle("No games to launch");
+        if (this.filteredGames.length === 0) {
+            initlogger.info("No games to scroll through.");
             return;
         }
 
-        const currentGame = this.installedGames[this.currentIndex];
-        console.log(`Launching game: ${currentGame.name}`);
+        const ticks = event.payload.ticks;
 
-        exec(`start steam://rungameid/${currentGame.appid}`, (err) => {
-            if (err) {
-                console.error(`Failed to launch game: ${err.message}`);
-                event.action.setTitle("Launch failed"); // Optionally notify the user
-            } else {
-                console.log(`Game launched successfully: ${currentGame.name}`);
-            }
-        });
+        if (ticks > 0) {
+            this.currentIndex = (this.currentIndex + 1) % this.filteredGames.length;
+        } else if (ticks < 0) {
+            this.currentIndex = (this.currentIndex - 1 + this.filteredGames.length) % this.filteredGames.length;
+        }
+
+        const dialAction = event.action as any;
+        this.updateWheel(dialAction);
     }
 
+    override async onDialDown(event: DialDownEvent): Promise<void> {
+        if (this.filteredGames.length === 0) {
+            initlogger.info("No games available to launch.");
+            return;
+        }
+
+        const currentGame = this.filteredGames[this.currentIndex];
+        initlogger.info(`Launching game: ${currentGame.name}`);
+
+        try {
+            const { exec } = await import("child_process");
+            exec(`start steam://rungameid/${currentGame.appid}`, (err) => {
+                if (err) {
+                    initlogger.error(`Failed to launch game: ${err.message}`);
+                } else {
+                    initlogger.info(`Game launched successfully: ${currentGame.name}`);
+                }
+            });
+        } catch (error) {
+            initlogger.error("Error executing game launch:", error);
+        }
+    }
+
+    override async onDidReceiveSettings(ev: any): Promise<void> {
+        if (this.isInitializing) return;
+        const settings = ev.payload.settings;
     
+        // Update selectedFilters with settings or default to an empty array
+        this.selectedFilters = settings?.filteroptions || [];
+        initlogger.info("Received settings:", settings);
+        initlogger.info("Selected filters initialized as:", this.selectedFilters);
+    
+        // Apply the filters
+        this.applyFilters();
+    
+        // Update wheel settings if needed
+        const dialAction = ev.action as any;
+        this.updateWheel(dialAction);
+    }
 }

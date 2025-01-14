@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Steam selector options</title>
+    <meta charset="utf-8" />
+    <script src="https://sdpi-components.dev/releases/v3/sdpi-components.js"></script>
+</head>
+
+<body>
+    <!-- Filter Options -->
+    <sdpi-item label="Filtering options">
+        <sdpi-checkbox-list setting="filteroptions" columns="1" id="filteringoptions">
+            <option value="game">Games</option>
+            <option value="application">Software</option>
+            <option value="tool">Tools</option>
+        </sdpi-checkbox-list>
+    </sdpi-item>
+
+    <script>
+        // Function to send data to the plugin
+        function sendValueToPlugin(value, param) {
+            if (window.opener) {
+                const event = new CustomEvent('sendValueToPlugin', {
+                    detail: {
+                        value: value,
+                        param: param,
+                    },
+                });
+                window.opener.dispatchEvent(event);
+            }
+        }
+
+        // Add event listener to capture changes
+        document.getElementById('filteringoptions').addEventListener('change', (event) => {
+            const selectedOptions = [...event.target.selectedOptions].map(opt => opt.value);
+            console.log("Selected options:", selectedOptions); // Debugging log
+        sendValueToPlugin(selectedOptions, 'filterOptions');
+        });
+
+    </script>
+</body>
+
+</html>
