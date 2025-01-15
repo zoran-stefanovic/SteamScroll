@@ -29,7 +29,7 @@
 	"CategoryIcon": "imgs/plugin/category_icon",
 	"Icon": "imgs/plugin/category_icon",
 	"CodePath": "bin/plugin.js",
-	"Description": "Use the dial to browse through Steam games and press the dial to launch them.",
+	"Description": "Use the dial to browse through Steam games and press the dial to launch them. Requires Steam to be installed in the default location, games/software can be located anywhere.",
 	"SDKVersion": 2,
 	"Software": {
 		"MinimumVersion": "6.4"
