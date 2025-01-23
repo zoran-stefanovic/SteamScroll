@@ -15,9 +15,9 @@ export class SteamAppInfoFetcher {
   /**
    * Fetches app info by executing the appinfo parser.
    * @param filePath Path to the appinfo.vdf file.
-   * @returns A promise that resolves to an array of objects containing appId and type.
+   * @returns A promise that resolves to an array of objects containing appId, type, and iconPath.
    */
-  public fetchAppInfo(filePath: string): Promise<{ appId: number; type: string }[]> {
+  public fetchAppInfo(filePath: string): Promise<{ appId: number; type: string; iconPath: string | null }[]> {
     return new Promise((resolve, reject) => {
       execFile(this.exePath, [filePath], (error: Error | null, stdout: string, stderr: string) => {
         if (error) {
@@ -36,13 +36,20 @@ export class SteamAppInfoFetcher {
             .trim()
             .split('\n')
             .map((line: string) => {
-              const [appId, type] = line.split(',');
+              const parts = line.split(',');
+              if (parts.length < 3) {
+                throw new Error(`Invalid line format: ${line}`);
+              }
+
+              const [appId, type, iconPath] = parts;
               if (!appId || isNaN(parseInt(appId, 10))) {
                 throw new Error(`Invalid appId in line: ${line}`);
               }
+
               return {
                 appId: parseInt(appId, 10),
-                type: type?.trim() || 'Unknown',
+                type: type.trim(),
+                iconPath: iconPath.trim() === 'NoIcon' ? null : iconPath.trim(),
               };
             });
           resolve(result);

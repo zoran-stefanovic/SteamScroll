@@ -8,22 +8,6 @@ import { SteamGameWithType } from "./types";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const logger = console; // Replace with your actual logger
-const steamLibraryCachePath = "C:\\Program Files (x86)\\Steam\\appcache\\librarycache";
-
-async function fetchIconFromLocalCache(appId: string): Promise<string | null> {
-    const iconFilePath = path.join(steamLibraryCachePath, `${appId}_icon.jpg`);
-
-    if (fs.existsSync(iconFilePath)) {
-        logger.info(`Found icon for AppID ${appId} at ${iconFilePath}`);
-        const imageData = fs.readFileSync(iconFilePath);
-        return `data:image/jpeg;base64,${imageData.toString('base64')}`;
-    } else {
-        logger.warn(`Icon not found for AppID ${appId} in ${steamLibraryCachePath}`);
-        return null;
-    }
-}
-
-
 
 function getLibraryPaths(): string[] {
     const steamConfigPath = "C:\\Program Files (x86)\\Steam\\steamapps\\libraryfolders.vdf";
@@ -82,22 +66,24 @@ export async function getSteamGamesWithTypes(): Promise<SteamGameWithType[]> {
 
         const appInfo = await fetcher.fetchAppInfo(appInfoPath);
 
-        const appInfoMap = new Map<string, string>();
+        const appInfoMap = new Map<string, { type: string; iconPath: string | null }>();
         for (const app of appInfo) {
-            appInfoMap.set(app.appId.toString(), app.type);
+            appInfoMap.set(app.appId.toString(), {
+                type: app.type,
+                iconPath: app.iconPath || null,
+            });
         }
 
         const steamGames: SteamGameWithType[] = [];
 
         for (const game of installedGames) {
-            const iconBase64 = await fetchIconFromLocalCache(game.appid);
-
+            const appInfo = appInfoMap.get(game.appid);
             steamGames.push({
                 name: game.name,
                 appid: game.appid,
-                icon: iconBase64 || "", // Ensure `icon` is always a string
-                type: appInfoMap.get(game.appid) || "Unknown", // Ensure `type` is always a string
-            });
+                icon: appInfo?.iconPath ? (fs.existsSync(`C:/Program Files (x86)/Steam/appcache/librarycache/${game.appid}/${appInfo.iconPath}.jpg`) ? `C:/Program Files (x86)/Steam/appcache/librarycache/${game.appid}/${appInfo.iconPath}` : "imgs/noiconplaceholder.jpeg") : "imgs/noiconplaceholder.jpeg", // Use iconPath from the appInfo
+                type: appInfo?.type || "Unknown", // Ensure `type` is always a string
+            }); 
         }
 
         return steamGames;
