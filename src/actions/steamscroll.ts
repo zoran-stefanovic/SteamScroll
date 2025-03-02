@@ -8,6 +8,9 @@ import streamDeck, {
 import { getSteamGamesWithTypes } from "../utils/steam-games";
 import { SteamGameWithType } from "../utils/types";
 import { JsonObject, JsonValue } from '@elgato/streamdeck';
+import * as fs from 'fs';
+import * as path from 'path';
+
 const initlogger = streamDeck.logger.createScope("steamscroll");
 
 interface GameType {
@@ -18,6 +21,7 @@ interface GameType {
 
 interface FilterSettings extends JsonObject {
     filteroptions: string[];
+    customSteamDir?: string;
     [key: string]: JsonValue;
 }
 
@@ -32,13 +36,15 @@ interface ContextData {
 export class SteamScroll extends SingletonAction {
     private allGames: SteamGameWithType[] = [];
     private filteredGames: SteamGameWithType[] = [];
-    private selectedFilters: string[] = ["game", "tool", "application"]; // Changed to lowercase
-    private currentIndex: number = 0; 
-    private currentDialAction: any = null; // Add this line
-    private initializingContexts: Map<string, boolean> = new Map(); // Track initializing state per context
+    private selectedFilters: string[] = ["game", "tool", "application"];
+    private currentIndex: number = 0;
+    private currentDialAction: any = null;
+    private initializingContexts: Map<string, boolean> = new Map();
     private contexts: Map<string, ContextData> = new Map();
     private isLoading: boolean = true;
     private loadError: string | null = null;
+    // Nieuwe property om de custom Steam directory op te slaan
+    private customSteamDir?: string;
 
     constructor() {
         super();
@@ -59,10 +65,11 @@ export class SteamScroll extends SingletonAction {
         try {
             initlogger.info("Loading Steam games...");
             this.isLoading = true;
-            this.allGames = await getSteamGamesWithTypes();
+            // Gebruik de customSteamDir (of default) bij het laden van de games
+            this.allGames = await getSteamGamesWithTypes(this.customSteamDir);
             this.isLoading = false;
             
-            // Update all contexts after games load
+            // Update alle contexts nadat de games zijn geladen
             for (const [context, contextData] of this.contexts.entries()) {
                 await this.applyFiltersForContext(context);
                 this.updateWheelForContext(context);
@@ -192,12 +199,34 @@ export class SteamScroll extends SingletonAction {
         try {
             this.currentDialAction = ev.action as any;
             const settings = await ev.action.getSettings<FilterSettings>();
+    
+            // Accept customSteamDir even if it's an empty string.
+            if (settings.customSteamDir !== undefined) {
+                this.customSteamDir = settings.customSteamDir;
+            }
             
             if (!settings?.filteroptions) {
                 throw new Error("Invalid filter settings");
             }
             
             this.selectedFilters = settings.filteroptions.map(f => this.normalizeGameType(f));
+    
+            // When building the actual path, substitute the default if the value is empty.
+            const steamDir = (this.customSteamDir !== undefined && this.customSteamDir !== "" ? this.customSteamDir : "C:/Program Files (x86)/Steam");
+            const normalizedSteamDir = steamDir.replace(/[\\/]+$/, "");
+            const appInfoPath = path.join(normalizedSteamDir, "appcache", "appinfo.vdf");
+    
+            // Check if appinfo.vdf exists—if not, set feedback and stop further processing.
+            if (!fs.existsSync(appInfoPath)) {
+                this.currentDialAction?.setFeedback({
+                    currentGameIcon: { value: "" },
+                    currentGameTitle: { value: "Bad Steam Dir" }
+                });
+                return;
+            }
+            
+            // If valid, load the games using the resolved steamDir.
+            this.allGames = await getSteamGamesWithTypes(steamDir);
             await this.waitForGamesLoaded();
             await this.applyFilters();
             await this.updateWheel(this.currentDialAction);
@@ -210,6 +239,7 @@ export class SteamScroll extends SingletonAction {
             this.initializingContexts.set(context, false);
         }
     }
+    
 
     override async onDialRotate(event: DialRotateEvent): Promise<void> {
         const context = event.action.id;
@@ -256,11 +286,34 @@ export class SteamScroll extends SingletonAction {
             initlogger.error("Error executing game launch:", error);
         }
     }
-
+ 
     override async onDidReceiveSettings(ev: any): Promise<void> {
         const context = ev.action.id;
-        const settings = ev.payload.settings;
+        const settings = ev.payload.settings as FilterSettings;
         
+        // Process customSteamDir if it exists (even if it's an empty string)
+        if (settings.customSteamDir !== undefined) {
+            this.customSteamDir = settings.customSteamDir;
+            const steamDir = (this.customSteamDir === "" ? "C:/Program Files (x86)/Steam" : this.customSteamDir);
+            const normalizedSteamDir = steamDir.replace(/[\\/]+$/, "");
+            const appInfoPath = path.join(normalizedSteamDir, "appcache", "appinfo.vdf");
+        
+            // If the file doesn't exist, set feedback and stop further processing.
+            if (!fs.existsSync(appInfoPath)) {
+                ev.action.setFeedback({
+                    currentGameIcon: { value: "" },
+                    currentGameTitle: { value: "Bad Steam Dir" }
+                });
+                return;
+            } else {
+                this.allGames = await getSteamGamesWithTypes(steamDir);
+            }
+        }
+        
+        // Always update context with filter options, whether or not customSteamDir changed.
         await this.handleContext(context, ev.action, settings?.filteroptions || []);
     }
+    
+    
 }
+ 

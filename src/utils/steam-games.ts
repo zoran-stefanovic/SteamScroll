@@ -4,14 +4,28 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { SteamAppInfoFetcher } from './SteamAppInfoFetcher';
 import { SteamGameWithType } from "./types";
-
+import streamDeck from '@elgato/streamdeck';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const logger = console; // Replace with your actual logger
+const logger = streamDeck.logger.createScope("steamgamests"); // Replace with your actual logger
 
-function getLibraryPaths(): string[] {
-    const steamConfigPath = "C:\\Program Files (x86)\\Steam\\steamapps\\libraryfolders.vdf";
-    logger.info('Retrieving library paths...');
+/**
+ * Retrieves the paths of Steam library folders from `libraryfolders.vdf`
+ * @param customSteamDir Custom Steam installation directory
+ * @returns Array of library paths
+ */
+function getLibraryPaths(customSteamDir?: string): string[] { 
+    // Default to the standard Steam path if none is provided
+    let steamDir = customSteamDir || "C:/Program Files (x86)/Steam";
+    
+
+    // Normalize the path: Remove any trailing slashes to avoid double separators
+    steamDir = steamDir.replace(/[\\/]+$/, "");
+
+    // Construct the full path
+    const steamConfigPath = `${steamDir}\\steamapps\\libraryfolders.vdf`;
+    logger.info(`Using Steam config path: ${steamConfigPath}`);
+
     try {
         const vdfContent = fs.readFileSync(steamConfigPath, 'utf-8');
         const libraryPaths: string[] = [];
@@ -32,12 +46,19 @@ function getLibraryPaths(): string[] {
     }
 }
 
-function getInstalledGames(): { appid: string; name: string }[] {
-    const libraryPaths = getLibraryPaths();
+/**
+ * Retrieves a list of installed games from the Steam library folders.
+ * @param customSteamDir Custom Steam installation directory
+ * @returns Array of installed games with app IDs and names
+ */
+function getInstalledGames(customSteamDir?: string): { appid: string; name: string }[] {
+    const libraryPaths = getLibraryPaths(customSteamDir);
     const installedGames: { appid: string; name: string }[] = [];
 
     libraryPaths.forEach((libraryPath) => {
         const appsPath = path.join(libraryPath, "steamapps");
+        if (!fs.existsSync(appsPath)) return;
+
         const acfFiles = fs.readdirSync(appsPath).filter(file => file.endsWith(".acf"));
 
         acfFiles.forEach((file) => {
@@ -58,34 +79,58 @@ function getInstalledGames(): { appid: string; name: string }[] {
     return installedGames;
 }
 
-export async function getSteamGamesWithTypes(): Promise<SteamGameWithType[]> {
+/**
+ * Retrieves Steam games with types and their associated icons.
+ * @param customSteamDir Custom Steam installation directory
+ * @returns Promise resolving to an array of SteamGameWithType objects
+ */
+export async function getSteamGamesWithTypes(customSteamDir?: string): Promise<SteamGameWithType[]> {
     try {
-        const installedGames = getInstalledGames();
+        // Get installed games using the correct Steam path
+        const installedGames = getInstalledGames(customSteamDir);
         const fetcher = new SteamAppInfoFetcher();
-        const appInfoPath = "C:/Program Files (x86)/Steam/appcache/appinfo.vdf";
 
+        // Normalize and construct the correct path for appinfo.vdf
+        let steamDir = customSteamDir || "C:/Program Files (x86)/Steam";
+        steamDir = steamDir.replace(/[\\/]+$/, ""); // Normalize the path
+        const appInfoPath = `${steamDir}\\appcache\\appinfo.vdf`;
+
+        logger.info(`Using appinfo path: ${appInfoPath}`);
         const appInfo = await fetcher.fetchAppInfo(appInfoPath);
 
+        // Create a map of app info for quick lookup
         const appInfoMap = new Map<string, { type: string; iconPath: string | null }>();
         for (const app of appInfo) {
             appInfoMap.set(app.appId.toString(), {
                 type: app.type,
                 iconPath: app.iconPath || null,
-            });
+            }); 
         }
 
+        // Process installed games
         const steamGames: SteamGameWithType[] = [];
 
         for (const game of installedGames) {
             const appInfo = appInfoMap.get(game.appid);
+
+            // Build the correct icon path
+            const iconPath = appInfo?.iconPath
+                ? path.join(steamDir, "appcache", "librarycache", game.appid, appInfo.iconPath)
+                : "imgs/noiconplaceholder.jpeg";
+            
+            const iconPathCheck = `${iconPath}.jpg`;
+            const finalIconPath = fs.existsSync(iconPathCheck) ? iconPath : "imgs/noiconplaceholder.jpeg";
+            
+
+
             steamGames.push({
                 name: game.name,
                 appid: game.appid,
-                icon: appInfo?.iconPath ? (fs.existsSync(`C:/Program Files (x86)/Steam/appcache/librarycache/${game.appid}/${appInfo.iconPath}.jpg`) ? `C:/Program Files (x86)/Steam/appcache/librarycache/${game.appid}/${appInfo.iconPath}` : "imgs/noiconplaceholder.jpeg") : "imgs/noiconplaceholder.jpeg", // Use iconPath from the appInfo
-                type: appInfo?.type || "Unknown", // Ensure `type` is always a string
-            }); 
+                icon: finalIconPath, // Ensure the correct path is assigned
+                type: appInfo?.type || "Unknown", // Ensure `type` is always valid
+            });
         }
-
+ 
         return steamGames;
     } catch (err) {
         logger.error("Error retrieving Steam games:", err);
