@@ -104,7 +104,7 @@ export async function getSteamGamesWithTypes(customSteamDir?: string): Promise<S
             appInfoMap.set(app.appId.toString(), {
                 type: app.type,
                 iconPath: app.iconPath || null,
-            });
+            }); 
         }
 
         // Process installed games
