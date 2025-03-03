@@ -10,7 +10,7 @@ The plugin works on the dial/touchbar part of the Stream Deck +, the touchbar di
 <img src="https://github.com/user-attachments/assets/4b674f75-3395-4554-93a9-06d30be04538" alt="alt text" width="200" height="200">
 
 
-Note: You can have games installed in multiple locations/drives, but you need to have the base Steam install in the default folder (C:\Program Files (x86)\Steam) in order for the plugin to read installed games and icons. 
+Note: You can have Steam and the games installed in multiple locations/drives, if you have the base Steam install in a different location than the default folder (C:\Program Files (x86)\Steam) you will have to provide that path in the 'custom steam directory' field located in the settings window.  
 
 
 Install:
