@@ -1,13 +1,13 @@
 import streamDeck, { LogLevel } from "@elgato/streamdeck";
-import { SteamScroll } from "./actions/steamscroll"; // Create a new action for SteamScroll
+import { SteamScroll } from "./actions/steamscroll";
 
-
-// We can enable "trace" logging so that all messages between the Stream Deck, and the plugin are recorded. When storing sensitive information
+// Enable TRACE logging to see detailed messages
 streamDeck.logger.setLevel(LogLevel.TRACE);
 
-
-// Register the increment action.
+// Register the dial action...
 streamDeck.actions.registerAction(new SteamScroll());
+
+
 
 // Finally, connect to the Stream Deck.
 streamDeck.connect();
