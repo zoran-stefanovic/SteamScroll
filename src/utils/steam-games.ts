@@ -110,6 +110,7 @@ export async function getSteamGamesWithTypes(customSteamDir?: string): Promise<S
         // Process installed games
         const steamGames: SteamGameWithType[] = [];
 
+
         for (const game of installedGames) {
             const appInfo = appInfoMap.get(game.appid);
 
@@ -131,7 +132,11 @@ export async function getSteamGamesWithTypes(customSteamDir?: string): Promise<S
             });
         }
  
+        // Sort the results alphabetically by game name for predictable output
+        steamGames.sort((a, b) => a.name.localeCompare(b.name));
+        logger.info("Sorted Games:", steamGames.map(g => g.name));
         return steamGames;
+        
     } catch (err) {
         logger.error("Error retrieving Steam games:", err);
         return [];

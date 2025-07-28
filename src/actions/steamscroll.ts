@@ -219,9 +219,9 @@ import streamDeck, {
         const ticks = event.payload.ticks;
       
         if (ticks > 0) {
-          contextData.currentIndex = (contextData.currentIndex + 1) % contextData.filteredGames.length;
-        } else if (ticks < 0) {
           contextData.currentIndex = (contextData.currentIndex - 1 + contextData.filteredGames.length) % contextData.filteredGames.length;
+        } else if (ticks < 0) {
+          contextData.currentIndex = (contextData.currentIndex + 1) % contextData.filteredGames.length;
         }
       
         // Include customSteamDir to preserve the custom path on update
