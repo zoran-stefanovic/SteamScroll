@@ -9,36 +9,41 @@ import json from '@rollup/plugin-json';
 const isWatching = !!process.env.ROLLUP_WATCH;
 const sdPlugin = "com.zstefanovic.steamscroll.sdPlugin";
 
+function sourcemapPathTransform(relativeSourcePath, sourcemapPath) {
+	return url.pathToFileURL(path.resolve(path.dirname(sourcemapPath), relativeSourcePath)).href;
+}
 
-/**
- * @type {import('rollup').RollupOptions}
- */
+function basePlugins({ browser }) {
+	return [
+		typescript({
+			mapRoot: isWatching ? "./" : undefined
+		}),
+		nodeResolve({
+			browser,
+			exportConditions: [browser ? "browser" : "node"],
+			preferBuiltins: !browser
+		}),
+		commonjs(),
+		json()
+	];
+}
+
 const config = {
 	input: "src/plugin.ts",
 	output: {
 		file: `${sdPlugin}/bin/plugin.js`,
 		sourcemap: isWatching,
-		sourcemapPathTransform: (relativeSourcePath, sourcemapPath) => {
-			return url.pathToFileURL(path.resolve(path.dirname(sourcemapPath), relativeSourcePath)).href;
-		}
+		sourcemapPathTransform
 	},
 	plugins: [
 		{
 			name: "watch-externals",
 			buildStart: function () {
 				this.addWatchFile(`${sdPlugin}/manifest.json`);
+				this.addWatchFile(`${sdPlugin}/ui/settings.html`);
 			},
 		},
-		typescript({
-			mapRoot: isWatching ? "./" : undefined
-		}),
-		nodeResolve({
-			browser: false,
-			exportConditions: ["node"],
-			preferBuiltins: true
-		}),
-		commonjs(),
-		json(),
+		...basePlugins({ browser: false }),
 		!isWatching && terser(),
 		{
 			name: "emit-module-package-file",

@@ -1,47 +1,219 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <title>Steam selector options</title>
     <meta charset="utf-8" />
-    <script src="https://sdpi-components.dev/releases/v3/sdpi-components.js"></script>
-</head>
-
-<body>
-    <!-- Filter Options -->
-    <sdpi-item label="Custom Steam Installation Directory">
-        <sdpi-textfield setting="customSteamDir" placeholder="C:/Program Files (x86)/Steam" id="customSteamDir"></sdpi-textfield>
-    </sdpi-item>
-    <sdpi-item label="Filtering options">
-        <sdpi-checkbox-list setting="filteroptions" columns="1" id="filteringoptions">
-            <option value="game">Games</option>
-            <option value="application">Software</option>
-            <option value="tool">Tools</option>
-        </sdpi-checkbox-list>
-    </sdpi-item>
-
-    <script>
-        // Function to send data to the plugin
-        function sendValueToPlugin(value, param) {
-            if (window.opener) {
-                const event = new CustomEvent('sendValueToPlugin', {
-                    detail: {
-                        value: value,
-                        param: param,
-                    },
-                });
-                window.opener.dispatchEvent(event);
-            }
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SteamScroll Settings</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #111315;
+            --panel: #1a1d21;
+            --panel-soft: #232830;
+            --border: #323843;
+            --text: #f3f5f7;
+            --muted: #a8b0bb;
+            --accent: #4aa3ff;
+            --accent-strong: #1976d2;
+            --danger: #d95f5f;
         }
 
-        // Add event listener to capture changes
-        document.getElementById('filteringoptions').addEventListener('change', (event) => {
-            const selectedOptions = [...event.target.selectedOptions].map(opt => opt.value);
-            console.log("Selected options:", selectedOptions); // Debugging log
-        sendValueToPlugin(selectedOptions, 'filterOptions');
-        });
+        * {
+            box-sizing: border-box;
+        }
 
-    </script>
+        body {
+            margin: 0;
+            padding: 16px;
+            background: var(--bg);
+            color: var(--text);
+            font: 12px/1.45 "Segoe UI", sans-serif;
+        }
+
+        button,
+        input,
+        select {
+            font: inherit;
+        }
+
+        button {
+            border: 1px solid var(--border);
+            background: var(--panel-soft);
+            color: var(--text);
+            border-radius: 8px;
+            padding: 8px 10px;
+            cursor: pointer;
+        }
+
+        button.primary {
+            background: var(--accent-strong);
+            border-color: var(--accent-strong);
+        }
+
+        button.danger {
+            color: #ffd7d7;
+            border-color: rgba(217, 95, 95, 0.45);
+        }
+
+        input[type="text"],
+        select {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--panel-soft);
+            color: var(--text);
+        }
+
+        .stack {
+            display: grid;
+            gap: 14px;
+        }
+
+        .section {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+        }
+
+        .section h2 {
+            margin: 0 0 6px;
+            font-size: 13px;
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .row.wrap {
+            flex-wrap: wrap;
+        }
+
+        .spaced {
+            justify-content: space-between;
+        }
+
+        .checkbox-grid {
+            display: grid;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .checkbox {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .filter-list {
+            display: grid;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .screen {
+            display: grid;
+            gap: 14px;
+        }
+
+        .screen-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .screen-title {
+            margin: 0;
+            font-size: 14px;
+        }
+
+        .filter-card {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 2px 8px;
+            background: rgba(74, 163, 255, 0.12);
+            color: #beddff;
+            font-size: 11px;
+        }
+
+        .status {
+            margin-top: 8px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--muted);
+        }
+
+        .status.error {
+            color: #ffd5d5;
+            background: rgba(217, 95, 95, 0.12);
+        }
+
+        .button-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .mini-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+
+        .game-list {
+            overflow: auto;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.02);
+            padding: 8px;
+            max-height: 260px;
+        }
+
+        .game-item {
+            display: grid;
+            grid-template-columns: 18px 1fr auto;
+            gap: 8px;
+            align-items: center;
+            padding: 6px 4px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .game-item:last-child {
+            border-bottom: 0;
+        }
+
+        .game-name {
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .compact-note {
+            font-size: 11px;
+            color: var(--muted);
+        }
+    </style>
+</head>
+<body>
+    <div id="app">Loading settings...</div>
+    <script type="module" src="./settings.js"></script>
 </body>
-
 </html>
