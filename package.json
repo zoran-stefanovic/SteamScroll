@@ -18,7 +18,7 @@
         "typescript": "^5.2.2"
     },
     "dependencies": {
-        "@elgato/streamdeck": "^1.0.0",
+        "@elgato/streamdeck": "^2.0.4",
         "binary-vdf-parser": "^1.0.2",
         "vdf": "^0.0.2"
     }

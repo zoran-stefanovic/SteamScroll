@@ -16,3 +16,13 @@ Note: You can have Steam and the games installed in multiple locations/drives, i
 Install:
 1. Download latest release.
 2. Double-click and Streamdeck software should add it automatically.
+
+## DRM compatibiliteit
+
+Deze plugin gebruikt nu `@elgato/streamdeck` **v2.x** en is daarmee in lijn met de Elgato DRM-vereisten voor Node.js plugins.
+
+Belangrijke punten voor distributie:
+- DRM-protectie wordt toegepast nadat de plugin via Maker Console is verwerkt.
+- Test DRM altijd met de gedownloade **DRM protected** build uit Maker Console (niet alleen de lokaal gepackte `.streamDeckPlugin`).
+- Vermijd runtime-afhankelijkheid van bestanden die door DRM als protected asset behandeld kunnen worden.
+
