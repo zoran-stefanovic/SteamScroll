@@ -4,9 +4,9 @@ import streamDeck, {
     SingletonAction,
     WillAppearEvent,
     KeyDownEvent,
-    DidReceiveSettingsEvent,
-    JsonObject
+    DidReceiveSettingsEvent
   } from "@elgato/streamdeck";
+  import type { JsonObject } from "@elgato/utils";
   import { getSteamGamesWithTypes } from "../utils/steam-games";
   import { SteamGameWithType } from "../utils/types";
   

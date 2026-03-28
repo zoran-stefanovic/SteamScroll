@@ -4,10 +4,11 @@ import streamDeck, {
     DialDownEvent,
     DialRotateEvent,
     DidReceiveSettingsEvent,
-    JsonObject,
+    SendToPluginEvent,
     SingletonAction,
     WillAppearEvent
 } from "@elgato/streamdeck";
+import type { JsonValue } from "@elgato/utils";
 import * as fs from "fs";
 import * as path from "path";
 import { getSteamGamesWithTypes } from "../utils/steam-games";
@@ -49,32 +50,31 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
             this.globalSettings = this.normalizeGlobalSettings(ev.settings);
             void this.refreshAllContexts();
         });
+    }
 
-        streamDeck.ui.registerRoute("/steam-games", async (req): Promise<SteamGamesResponse> => {
-            const settings = await req.action.getSettings<FilterSettings>();
-            const steamDir = this.getEffectiveSteamDir(settings.customSteamDir);
-            const validationError = this.validateSteamDir(steamDir);
+    private async createSteamGamesResponse(settings: FilterSettings): Promise<SteamGamesResponse> {
+        const steamDir = this.getEffectiveSteamDir(settings.customSteamDir);
+        const validationError = this.validateSteamDir(steamDir);
 
-            if (validationError) {
-                return {
-                    games: [],
-                    steamDir,
-                    error: validationError
-                };
-            }
-
-            const games = await this.loadGamesForDir(steamDir);
-            const compactGames: SteamGameOption[] = games.map((game) => ({
-                appid: game.appid,
-                name: game.name,
-                type: game.type
-            }));
-
+        if (validationError) {
             return {
-                games: compactGames,
-                steamDir
+                games: [],
+                steamDir,
+                error: validationError
             };
-        });
+        }
+
+        const games = await this.loadGamesForDir(steamDir);
+        const compactGames: SteamGameOption[] = games.map((game) => ({
+            appid: game.appid,
+            name: game.name,
+            type: game.type
+        }));
+
+        return {
+            games: compactGames,
+            steamDir
+        };
     }
 
     private normalizeGameType(type: string): string {
@@ -418,6 +418,25 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
             filteroptions: contextData.filters,
             lastScrollIndex: contextData.currentIndex,
             selectedCustomFilterId: contextData.selectedCustomFilterId
+        });
+    }
+
+    override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, FilterSettings>): Promise<void> {
+        const payload = ev.payload;
+        if (!payload || typeof payload !== "object") {
+            return;
+        }
+
+        const requestType = "requestType" in payload ? payload.requestType : undefined;
+        if (requestType !== "fetch-steam-games") {
+            return;
+        }
+
+        const settings = await ev.action.getSettings<FilterSettings>();
+        const response = await this.createSteamGamesResponse(settings);
+        await streamDeck.ui.sendToPropertyInspector({
+            requestType: "fetch-steam-games",
+            response
         });
     }
 }

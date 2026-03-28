@@ -1427,6 +1427,43 @@ const state = {
     view: "main"
 };
 const app = document.getElementById("app");
+let pendingSteamGamesRequest = null;
+
+streamDeck.plugin.onSendToPropertyInspector((ev) => {
+    const payload = ev.payload;
+    if (!payload || payload.requestType !== "fetch-steam-games" || !pendingSteamGamesRequest) {
+        return;
+    }
+
+    const resolve = pendingSteamGamesRequest;
+    pendingSteamGamesRequest = null;
+    resolve(payload.response);
+});
+
+async function requestSteamGames() {
+    if (pendingSteamGamesRequest) {
+        return null;
+    }
+
+    const responsePromise = new Promise((resolve) => {
+        pendingSteamGamesRequest = resolve;
+    });
+
+    await streamDeck.plugin.sendToPlugin({ requestType: "fetch-steam-games" });
+
+    return Promise.race([
+        responsePromise,
+        new Promise((resolve) => {
+            setTimeout(() => {
+                if (pendingSteamGamesRequest) {
+                    pendingSteamGamesRequest = null;
+                    resolve(null);
+                }
+            }, 5000);
+        })
+    ]);
+}
+
 function normalizeSettings(settings) {
     return {
         filteroptions: Array.isArray(settings?.filteroptions) && settings.filteroptions.length > 0
@@ -1490,8 +1527,8 @@ async function refreshInstalledGames() {
     state.gamesLoading = true;
     state.gamesError = "";
     render();
-    const response = await streamDeck.plugin.fetch("/steam-games");
-    if (!response.ok || !response.body) {
+    const body = await requestSteamGames();
+    if (!body) {
         state.installedGames = [];
         state.effectiveSteamDir = "";
         state.gamesError = "Unable to load installed Steam games.";
@@ -1499,7 +1536,6 @@ async function refreshInstalledGames() {
         render();
         return;
     }
-    const body = response.body;
     state.installedGames = body.games ?? [];
     state.effectiveSteamDir = body.steamDir ?? "";
     state.gamesError = body.error ?? "";

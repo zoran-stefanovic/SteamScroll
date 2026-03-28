@@ -1,4 +1,4 @@
-import type { JsonObject } from "@elgato/streamdeck";
+import type { JsonObject } from "@elgato/utils";
 
 export interface SteamGameWithType {
     appid: string;
