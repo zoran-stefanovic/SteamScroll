@@ -1,0 +1,37 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import ts from 'typescript';
+const source=fs.readFileSync('src/actions/steamscroll.ts','utf8');
+const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,experimentalDecorators:true}}).outputText;
+const sdk={SingletonAction:class{},action:()=>x=>x,logger:{createScope:()=>({info(){},error(){},warn(){}})},settings:{getGlobalSettings:async()=>({customFilters:[]}),onDidReceiveGlobalSettings(){}},ui:{onSendToPlugin(){}}};
+const module={exports:{}};
+vm.runInNewContext(js,{exports:module.exports,require:n=>n==='@elgato/streamdeck'?{...sdk,default:sdk}:n==='fs'?{existsSync:()=>true}:n==='path'?{join:(...a)=>a.join('/')}:n.includes('steam-games')?{}:{},console});
+const Plugin=module.exports.SteamScroll;
+const plugin=new Plugin(); await Promise.resolve();
+const games=['game','demo','tool','application','unknown'].map((type,i)=>({appid:String(i),name:type,type,icon:''}));
+plugin.loadGamesForDir=async()=>games;
+const dial=id=>({id,saved:{},async setSettings(s){this.saved=JSON.parse(JSON.stringify(s));},async getSettings(){return this.saved;},async setFeedback(s){this.feedback=s;}});
+const a=dial('a'), b=dial('b');
+await plugin.setContext('a',a,{filteroptions:['game'],selectedCustomFilterId:null});
+assert.deepEqual(Array.from(plugin.contexts.get('a').filteredGames,g=>g.type),['game','demo']);
+plugin.globalSettings={customFilters:[{id:'demo',name:'Demo',appids:['1'],updatedAt:''}]};
+await plugin.setContext('a',a,{filteroptions:['game'],selectedCustomFilterId:'demo'});
+assert.equal(plugin.contexts.get('a').filteredGames[0].type,'demo');
+await plugin.setContext('b',b,{filteroptions:['tool']});
+assert.deepEqual(Array.from(plugin.contexts.get('b').filteredGames,g=>g.type),['tool']);
+for(const reverse of [undefined,false,true,'true']) for(const ticks of [-5,-2,-1,0,1,2,5]){
+ await plugin.setContext('a',a,{filteroptions:['game','tool','application'],reverseDirection:reverse});
+ const c=plugin.contexts.get('a'); c.currentIndex=2;
+ await plugin.onDialRotate({action:a,payload:{ticks}});
+ assert.equal(c.currentIndex,((2+ticks*(reverse===true?1:-1))%4+4)%4);
+ assert.equal(a.saved.reverseDirection,reverse===true);
+ assert.equal(plugin.contexts.get('b').reverseDirection,false);
+ await plugin.onDidReceiveSettings({action:a,payload:{settings:a.saved}});
+ assert.equal(plugin.contexts.get('a').reverseDirection,reverse===true);
+}
+await plugin.onWillAppear({action:a}); assert.equal(plugin.contexts.get('a').reverseDirection,false);
+plugin.globalSettings.customFilters=[{id:'empty',name:'Empty',appids:[],updatedAt:''}];
+await plugin.setContext('a',a,{filteroptions:['game'],selectedCustomFilterId:'empty'});
+await plugin.onDialRotate({action:a,payload:{ticks:5}}); assert.equal(plugin.contexts.get('a').currentIndex,0);
+console.log('PASS: demo/type/collection filtering; 28 tick/direction cases; per-instance isolation; settings roundtrip; appearance; empty collection');

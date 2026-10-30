@@ -45,6 +45,7 @@ interface ContextData {
     currentIndex: number;
     filteredGames: SteamGameWithType[];
     selectedCustomFilterId: string | null;
+    reverseDirection: boolean;
 }
 
 const DEFAULT_FILTERS = ["game", "tool", "application"];
@@ -222,7 +223,7 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
 
         contextData.filteredGames = allGames.filter((game) => {
             const normalizedType = this.normalizeGameType(game.type);
-            const matchesType = contextData.filters.some((filter) => normalizedType === filter);
+            const matchesType = contextData.filters.some((filter) => normalizedType === filter || (filter === "game" && normalizedType === "demo"));
             if (!matchesType) {
                 return false;
             }
@@ -290,6 +291,7 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
                     customSteamDir: contextData.steamDir,
                     filteroptions: contextData.filters,
                     lastScrollIndex: contextData.currentIndex,
+                    reverseDirection: contextData.reverseDirection,
                     selectedCustomFilterId: null
                 });
             }
@@ -313,6 +315,7 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
             filters,
             currentIndex: typeof settings.lastScrollIndex === "number" ? settings.lastScrollIndex : 0,
             filteredGames: [],
+            reverseDirection: settings.reverseDirection === true,
             selectedCustomFilterId: this.getCustomFilter(selectedCustomFilterId) ? selectedCustomFilterId : null
         });
 
@@ -351,6 +354,7 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
                 customSteamDir: steamDir,
                 filteroptions: this.normalizeFilters(settings.filteroptions),
                 lastScrollIndex: settings.lastScrollIndex,
+                reverseDirection: settings.reverseDirection === true,
                 selectedCustomFilterId: settings.selectedCustomFilterId ?? null
             });
 
@@ -358,6 +362,7 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
                 customSteamDir: steamDir,
                 filteroptions: this.contexts.get(context)?.filters ?? DEFAULT_FILTERS,
                 lastScrollIndex: this.contexts.get(context)?.currentIndex ?? 0,
+                reverseDirection: this.contexts.get(context)?.reverseDirection ?? false,
                 selectedCustomFilterId: this.contexts.get(context)?.selectedCustomFilterId ?? null
             });
         } catch (error) {
@@ -380,16 +385,15 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
         }
 
         const ticks = event.payload.ticks;
-        if (ticks > 0) {
-            contextData.currentIndex = (contextData.currentIndex - 1 + contextData.filteredGames.length) % contextData.filteredGames.length;
-        } else if (ticks < 0) {
-            contextData.currentIndex = (contextData.currentIndex + 1) % contextData.filteredGames.length;
-        }
+        const delta = ticks * (contextData.reverseDirection ? 1 : -1);
+        const count = contextData.filteredGames.length;
+        contextData.currentIndex = ((contextData.currentIndex + delta) % count + count) % count;
 
         await dialAction.setSettings({
             customSteamDir: contextData.steamDir,
             filteroptions: contextData.filters,
             lastScrollIndex: contextData.currentIndex,
+            reverseDirection: contextData.reverseDirection,
             selectedCustomFilterId: contextData.selectedCustomFilterId
         });
 
@@ -458,6 +462,7 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
             customSteamDir: contextData.steamDir,
             filteroptions: contextData.filters,
             lastScrollIndex: contextData.currentIndex,
+            reverseDirection: contextData.reverseDirection,
             selectedCustomFilterId: contextData.selectedCustomFilterId
         });
     }

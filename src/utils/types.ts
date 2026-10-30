@@ -23,6 +23,7 @@ export interface CustomSteamFilter extends JsonObject {
 export interface FilterSettings extends JsonObject {
     filteroptions: string[];
     customSteamDir?: string;
+    reverseDirection?: boolean;
     lastScrollIndex?: number;
     selectedCustomFilterId?: string | null;
 }

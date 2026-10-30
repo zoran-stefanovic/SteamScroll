@@ -1432,6 +1432,7 @@ function normalizeSettings(settings) {
         filteroptions: Array.isArray(settings?.filteroptions) && settings.filteroptions.length > 0
             ? Array.from(new Set(settings.filteroptions.map((filter) => String(filter).toLowerCase().trim())))
             : [...DEFAULT_FILTERS],
+        reverseDirection: settings?.reverseDirection === true,
         customSteamDir: typeof settings?.customSteamDir === "string" ? settings.customSteamDir : "",
         lastScrollIndex: typeof settings?.lastScrollIndex === "number" ? settings.lastScrollIndex : 0,
         selectedCustomFilterId: typeof settings?.selectedCustomFilterId === "string"
@@ -1725,12 +1726,13 @@ function render() {
                 </div>
             </section>
             <section class="section">
+                <label class="checkbox"><input id="reverse-direction" type="checkbox" ${state.settings.reverseDirection === true ? "checked" : ""} />Reverse scroll direction</label>
                 <h2>Base filters</h2>
                 <div class="checkbox-grid">
                     ${DEFAULT_FILTERS.map((filter) => `
                         <label class="checkbox">
                             <input type="checkbox" data-action="toggle-base-filter" value="${filter}" ${state.settings.filteroptions.includes(filter) ? "checked" : ""} />
-                            <span>${filter === "game" ? "Games" : filter === "tool" ? "Tools" : "Applications"}</span>
+                            <span>${filter === "game" ? "Games (including demos)" : filter === "tool" ? "Tools" : "Applications"}</span>
                         </label>
                     `).join("")}
                 </div>
@@ -1747,6 +1749,10 @@ function render() {
     bindEvents();
 }
 function bindEvents() {
+    const reverse = document.getElementById("reverse-direction");
+    reverse?.addEventListener("change", async () => {
+        await persistSettings({ reverseDirection: reverse.checked });
+    });
     const steamDirInput = document.getElementById("steam-dir");
     steamDirInput?.addEventListener("change", async () => {
         await persistSettings({ customSteamDir: steamDirInput.value, lastScrollIndex: 0 }, { refreshGames: true });
