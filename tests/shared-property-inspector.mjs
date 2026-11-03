@@ -1,0 +1,51 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const source = fs.readFileSync('com.zstefanovic.steamscroll.sdPlugin/ui/settings.js', 'utf8');
+const application = source.slice(source.indexOf('const PROVIDER =')).replace('void initialize();', '');
+for (const provider of ['steam', 'epic', 'battlenet', 'all']) {
+    let globals = { customFilters: [{ id: 'same', name: 'Steam', appids: ['123'] }], epicCustomFilters: [{ id: 'same', name: 'Epic', appids: ['epic:n:i:a'] }], futureField: 42 };
+    const legacy=JSON.stringify([globals.customFilters,globals.epicCustomFilters]);
+    const calls = [], app={innerHTML:''};
+    let globalSettingsReader = async () => globals;
+    const ctx = { document: { body: { dataset: { provider } }, getElementById: id => id==='app'?app:null,querySelector:()=>null,querySelectorAll:()=>[] },
+        streamDeck: { settings: { getGlobalSettings: () => globalSettingsReader(), setGlobalSettings: async value => { globals = value; } }, plugin: { fetch: async route => { calls.push(route); return { ok: true, body: { games: [], steamDir: '' } }; } } } };
+    vm.createContext(ctx);
+    vm.runInContext(application + '\nglobalThis.api = { state, render, normalizeSettings, normalizeGlobalSettings, persistGlobalFilters, refreshInstalledGames };', ctx);
+    const api=ctx.api;
+    assert.deepEqual(Array.from(api.normalizeGlobalSettings(globals).customFilters,f=>f.id),['same','legacy-epic:same']);
+    assert.equal(api.normalizeSettings({reverseDirection:'true'}).reverseDirection,false);
+    assert.equal(api.normalizeSettings({reverseDirection:true}).reverseDirection,true);
+    assert.equal(api.normalizeSettings({selectedCustomFilterId:'same'}).selectedCustomFilterId,provider==='epic'?'legacy-epic:same':'same');
+    assert.equal(api.normalizeSettings({selectedCustomFilterId:'same',collectionSchema:1}).selectedCustomFilterId,'same');
+    assert.deepEqual(Array.from(api.normalizeSettings({libraries:['epic','battlenet','bad']}).libraries),['epic','battlenet']);
+    assert.equal(api.normalizeSettings({libraries:[]}).libraries.length,0);
+    assert.equal(api.normalizeSettings({futureSetting:42}).futureSetting,42);
+    api.state.globalSettings=api.normalizeGlobalSettings(globals);
+    globals.gameCollections=[{id:'concurrent',name:'Other inspector',appids:['999']}];
+    let finishGlobalRead;
+    globalSettingsReader = () => new Promise(resolve => { finishGlobalRead = resolve; });
+    const pendingSave = api.persistGlobalFilters([...api.state.globalSettings.customFilters,{id:'mixed',name:'Mixed',appids:['123','epic:n:i:a','battlenet:d3:x'],updatedAt:'now'}]);
+    // The SDK can deliver a concurrent global-settings event while this save awaits its latest snapshot.
+    const eventConcurrent = { id:'event-concurrent', name:'Added during read', appids:['456'], updatedAt:'now' };
+    api.state.globalSettings = api.normalizeGlobalSettings({...globals, gameCollections:[...globals.gameCollections,eventConcurrent]});
+    globals.gameCollections.push(eventConcurrent);
+    finishGlobalRead(globals);
+    await pendingSave;
+    globalSettingsReader = async () => globals;
+    assert(globals.gameCollections.some(f=>f.id==='concurrent'));
+    assert(globals.gameCollections.some(f=>f.id==='event-concurrent'), 'concurrent SDK event additions survive a save');
+    assert.equal(globals.gameCollections.find(f=>f.id==='mixed').appids.length,3);
+    assert.equal(JSON.stringify([globals.customFilters,globals.epicCustomFilters]),legacy);
+    assert.equal(globals.futureField,42);
+    await api.persistGlobalFilters(api.state.globalSettings.customFilters.filter(f=>f.id!=='legacy-epic:same'));
+    assert(!api.normalizeGlobalSettings(globals).customFilters.some(f=>f.id==='legacy-epic:same'));
+    assert.deepEqual(Array.from(globals.deletedGameCollections),['legacy-epic:same']);
+    api.state.settings=api.normalizeSettings({libraries:['epic','battlenet'],selectedCustomFilterId:'mixed',collectionSchema:1});
+    api.render();assert.match(app.innerHTML,/Libraries on this dial/);assert.match(app.innerHTML,/only to Steam/);assert.match(app.innerHTML,/toggle-base-filter" disabled/);assert.match(app.innerHTML,/Manage collections/);
+    api.state.view='editor';api.state.editor={id:'mixed',name:'<Mixed>',selectedAppIds:new Set(['epic:n:i:a'])};
+    api.state.installedGames=[{appid:'epic:n:i:a',name:'<unsafe>',type:'game',provider:'epic'}];api.render();
+    assert.match(app.innerHTML,/&lt;unsafe&gt;/);assert.match(app.innerHTML,/Epic Games/);assert(!app.innerHTML.includes('<unsafe>'));
+    await api.refreshInstalledGames(true);assert.equal(calls[0].path,`/${provider}-refresh`);assert.equal(calls[0].timeout,20000);
+}
+    console.log('PASS: all four inspectors; mixed shared collections; legacy ID collisions; selection migration; concurrent event additions during awaited settings reads; deletion tombstones; unknown settings; library selection; Steam-only filters; HTML escaping and routing.');

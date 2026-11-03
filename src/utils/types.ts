@@ -11,6 +11,7 @@ export interface SteamGameOption extends JsonObject {
     appid: string;
     name: string;
     type: string;
+    provider?: string;
 }
 
 export interface CustomSteamFilter extends JsonObject {
@@ -26,10 +27,15 @@ export interface FilterSettings extends JsonObject {
     reverseDirection?: boolean;
     lastScrollIndex?: number;
     selectedCustomFilterId?: string | null;
+    libraries?: string[];
+    collectionSchema?: number;
 }
 
 export interface GlobalPluginSettings extends JsonObject {
     customFilters: CustomSteamFilter[];
+    epicCustomFilters?: CustomSteamFilter[];
+    gameCollections?: CustomSteamFilter[];
+    deletedGameCollections?: string[];
 }
 
 export interface SteamGamesResponse extends JsonObject {
@@ -37,4 +43,3 @@ export interface SteamGamesResponse extends JsonObject {
     steamDir: string;
     error?: string;
 }
-

@@ -5,12 +5,19 @@ import streamDeck, {
     DialRotateEvent,
     DidReceiveSettingsEvent,
     SingletonAction,
-    WillAppearEvent
+    WillAppearEvent,
+    WillDisappearEvent
 } from "@elgato/streamdeck";
 import type { JsonObject, JsonValue } from "@elgato/utils";
 import * as fs from "fs";
 import * as path from "path";
+import { selectedLibraries, gameProvider, matchesSteamType, sharedCollections, selectedCollectionId, type LibraryPreset, type LibraryId } from "../utils/libraries";
+import { discoverBattleNetGames, launchBattleNetGame, type BattleNetGame } from "../utils/battlenet-games";
+import { execFile } from "node:child_process";
+import { findSteamDirectory, clearSteamLocationCache } from "../utils/steam-location";
 import { getSteamGamesWithTypes } from "../utils/steam-games";
+import { discoverEpicGames, epicRoot, launchEpicGame, type EpicGame } from "../utils/epic-games";
+import { EPIC_ICON_FALLBACK, getEpicIcon } from "../utils/epic-icons";
 import {
     CustomSteamFilter,
     FilterSettings,
@@ -46,28 +53,113 @@ interface ContextData {
     filteredGames: SteamGameWithType[];
     selectedCustomFilterId: string | null;
     reverseDirection: boolean;
+    libraries: LibraryId[];
+    settings: FilterSettings;
 }
 
 const DEFAULT_FILTERS = ["game", "tool", "application"];
+const LAUNCH_FRAMES = Array.from({ length: 12 }, (_, frame) =>
+    `data:image/svg+xml;base64,${Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60"><circle cx="30" cy="30" r="20" fill="none" stroke="#253542" stroke-width="5"/><path d="M30 10 A20 20 0 0 1 50 30" fill="none" stroke="#66D9FF" stroke-width="5" stroke-linecap="round" transform="rotate(${frame * 30} 30 30)"/></svg>`).toString("base64")}`);
 
 @action({ UUID: "com.zstefanovic.steamscroll.dial" })
 export class SteamScroll extends SingletonAction<FilterSettings> {
-    private readonly defaultSteamDir = "C:/Program Files (x86)/Steam";
     private readonly contexts = new Map<string, ContextData>();
     private readonly initializingContexts = new Map<string, boolean>();
     private readonly gamesCache = new Map<string, SteamGameWithType[]>();
     private readonly pendingLoads = new Map<string, Promise<SteamGameWithType[]>>();
     private globalSettings: GlobalPluginSettings = { customFilters: [] };
+    private readonly globalSettingsReady: Promise<void>;
+    private readonly libraryWarnings = new Map<string, string>();
+    private readonly loadedAt = new Map<string, number>();
+    private readonly launchPending = new Set<string>();
+    private readonly launchAnimations = new Map<string, { timer?: ReturnType<typeof setTimeout> }>();
+    private readonly launchFeedbackUntil = new Map<string, number>();
 
-    constructor() {
+    private stopLaunchAnimation(context: string): void {
+        const animation = this.launchAnimations.get(context);
+        if (animation?.timer) clearTimeout(animation.timer);
+        this.launchAnimations.delete(context);
+    }
+
+    private loadGameIcons(key: string, games: SteamGameWithType[]): void {
+        const iconGames = games.filter(game => (game.appid.startsWith("epic:") || game.appid.startsWith("battlenet:")) && typeof (game as EpicGame).executable === "string");
+        if (!iconGames.length) return;
+        const [normalizedDir, libraries] = JSON.parse(key) as [string, LibraryId[]];
+        // Keep extraction bounded so a large library does not spawn a PowerShell process per game.
+        void (async () => {
+            let next = 0;
+            const worker = async () => {
+                    while (next < iconGames.length) {
+                    const game = iconGames[next++] as EpicGame | BattleNetGame;
+                    const cacheDir = game.appid.startsWith("battlenet:") ? path.join(process.env.LOCALAPPDATA || process.env.TEMP || ".", "GameScroller", "battlenet-icons") : undefined;
+                    const icon = await getEpicIcon(game.executable, cacheDir ? { cacheDir } : {});
+                    const current = this.gamesCache.get(key);
+                    if (current !== games) return;
+                    const cachedGame = current.find(item => item.appid === game.appid) as EpicGame | undefined;
+                    if (!cachedGame || cachedGame.executable !== game.executable || cachedGame.icon === icon) continue;
+                    cachedGame.icon = icon;
+                    for (const [context, data] of this.contexts) {
+                        if (this.normalizeSteamDir(data.steamDir) !== normalizedDir || JSON.stringify(data.libraries) !== JSON.stringify(libraries)) continue;
+                        const visibleGame = data.filteredGames.find(item => item.appid === game.appid) as EpicGame | undefined;
+                        if (!visibleGame || visibleGame.executable !== game.executable) continue;
+                        visibleGame.icon = icon;
+                        if (this.launchAnimations.has(context) || (this.launchFeedbackUntil.get(context) ?? 0) > Date.now()) continue;
+                        // Refresh icons only: leave titles, provider feedback and current selection untouched.
+                        const count = data.filteredGames.length;
+                        if (!count) continue;
+                        const feedback: Record<string, { value: string }> = {};
+                        for (const [slot, index] of [["prev", (data.currentIndex - 1 + count) % count], ["current", data.currentIndex], ["next", (data.currentIndex + 1) % count]] as const) {
+                            feedback[`${slot}GameIcon`] = { value: data.filteredGames[index].icon };
+                        }
+                        void data.dialAction.setFeedback(feedback).catch(error => logger.warn("Could not refresh game icon:", error));
+                    }
+                }
+            };
+            await Promise.all([worker(), worker()]);
+        })().catch(error => logger.warn("Could not load Epic game icons:", error));
+    }
+
+    private startLaunchAnimation(context: string, data: ContextData) {
+        this.stopLaunchAnimation(context);
+        const animation: { timer?: ReturnType<typeof setTimeout> } = {};
+        this.launchAnimations.set(context, animation);
+        let frame = 0;
+        const render = async () => {
+            if (this.launchAnimations.get(context) !== animation) return;
+            if (this.contexts.get(context) !== data) {
+                this.stopLaunchAnimation(context);
+                return;
+            }
+            try {
+                await data.dialAction.setFeedback({
+                    prevGameIcon: { value: "" }, prevGameTitle: { value: "" },
+                    currentGameIcon: { value: LAUNCH_FRAMES[frame++ % LAUNCH_FRAMES.length] },
+                    currentGameTitle: { value: "" },
+                    nextGameIcon: { value: "" }, nextGameTitle: { value: "" },
+                    providerName: { value: "Launching game" }
+                });
+                if (this.launchAnimations.get(context) === animation) {
+                    animation.timer = setTimeout(() => { void render(); }, 80);
+                    animation.timer.unref();
+                }
+            } catch (error) {
+                if (this.launchAnimations.get(context) === animation) this.stopLaunchAnimation(context);
+                logger.warn("Could not update launch animation:", error);
+            }
+        };
+        void render();
+        return animation;
+    }
+
+    constructor(private readonly provider: LibraryPreset = "steam") {
         super();
-        void this.initializeGlobalSettings();
+        this.globalSettingsReady = this.initializeGlobalSettings();
         streamDeck.settings.onDidReceiveGlobalSettings<GlobalPluginSettings>((ev) => {
             this.globalSettings = this.normalizeGlobalSettings(ev.settings);
-            void this.refreshAllContexts();
+            void this.refreshAllContexts().catch(error => logger.error("Could not refresh library:", error));
         });
         streamDeck.ui.onSendToPlugin<PluginRouteRequest, FilterSettings>((ev) => {
-            void this.handlePropertyInspectorMessage(ev);
+            void this.handlePropertyInspectorMessage(ev).catch(error => logger.error("Library request failed:", error));
         });
     }
 
@@ -75,16 +167,27 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
         ev: { action: { getSettings: () => Promise<FilterSettings> }; payload: PluginRouteRequest }
     ): Promise<void> {
         const payload = ev.payload;
-        if (payload.__type !== "request" || payload.path !== "public:/steam-games" || typeof payload.id !== "string") {
+        if (payload.__type !== "request" || ![ `public:/${this.provider}-games`, `public:/${this.provider}-refresh` ].includes(payload.path ?? "") || typeof payload.id !== "string") {
             return;
         }
 
         const settings = await ev.action.getSettings();
-        const body = await this.getSteamGamesResponse(settings);
+        let body: SteamGamesResponse;
+        try {
+            if (payload.path?.endsWith("-refresh")) {
+                await Promise.allSettled(this.pendingLoads.values());
+                this.gamesCache.clear();
+                clearSteamLocationCache();
+            }
+            body = await this.getSteamGamesResponse(settings);
+            if (payload.path?.endsWith("-refresh")) await this.refreshAllContexts();
+        } catch (error) {
+            body = { games: [], steamDir: await this.getEffectiveSteamDir(settings.customSteamDir), error: error instanceof Error ? error.message : "Unable to read the game library." };
+        }
         const response: PluginRouteResponse = {
             __type: "response",
             id: payload.id,
-            path: payload.path,
+            path: payload.path!,
             status: 200,
             body
         };
@@ -95,7 +198,7 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
     }
 
     private async getSteamGamesResponse(settings: FilterSettings): Promise<SteamGamesResponse> {
-        const steamDir = this.getEffectiveSteamDir(settings.customSteamDir);
+        const steamDir = await this.getEffectiveSteamDir(settings.customSteamDir);
         const validationError = this.validateSteamDir(steamDir);
 
         if (validationError) {
@@ -106,16 +209,18 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
             };
         }
 
-        const games = await this.loadGamesForDir(steamDir);
+        const games = await this.loadGamesForDir(steamDir, ["steam", "epic", "battlenet"]);
         const compactGames: SteamGameOption[] = games.map((game) => ({
             appid: game.appid,
             name: game.name,
-            type: game.type
+            type: game.type,
+            provider: gameProvider(game)
         }));
 
         return {
             games: compactGames,
-            steamDir
+            steamDir,
+            ...(this.libraryWarnings.get(JSON.stringify([this.normalizeSteamDir(steamDir), ["steam", "epic", "battlenet"]])) ? { error: this.libraryWarnings.get(JSON.stringify([this.normalizeSteamDir(steamDir), ["steam", "epic", "battlenet"]])) } : {})
         };
     }
 
@@ -127,12 +232,10 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
         return steamDir.replace(/[\\/]+$/, "");
     }
 
-    private getEffectiveSteamDir(customSteamDir?: string): string {
-        return customSteamDir && customSteamDir.trim() !== ""
-            ? this.normalizeSteamDir(customSteamDir)
-            : this.defaultSteamDir;
+    private async getEffectiveSteamDir(customSteamDir?: string): Promise<string> {
+        const legacy = this.provider === "epic" && customSteamDir && path.normalize(customSteamDir).toLowerCase() === path.normalize(epicRoot()).toLowerCase() ? undefined : customSteamDir;
+        return findSteamDirectory(legacy);
     }
-
     private normalizeFilters(filters?: string[]): string[] {
         const normalized = (filters && filters.length > 0 ? filters : DEFAULT_FILTERS)
             .map((filter) => this.normalizeGameType(filter));
@@ -140,25 +243,7 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
     }
 
     private normalizeGlobalSettings(settings?: Partial<GlobalPluginSettings>): GlobalPluginSettings {
-        const customFilters = Array.isArray(settings?.customFilters)
-            ? settings.customFilters
-                .filter((filter): filter is CustomSteamFilter => {
-                    return Boolean(
-                        filter &&
-                        typeof filter.id === "string" &&
-                        typeof filter.name === "string" &&
-                        Array.isArray(filter.appids)
-                    );
-                })
-                .map((filter) => ({
-                    id: filter.id,
-                    name: filter.name,
-                    appids: filter.appids.map((appid) => String(appid)),
-                    updatedAt: typeof filter.updatedAt === "string" ? filter.updatedAt : new Date(0).toISOString()
-                }))
-            : [];
-
-        return { customFilters };
+        return { customFilters: sharedCollections(settings) };
     }
 
     private async initializeGlobalSettings(): Promise<void> {
@@ -171,36 +256,38 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
         }
     }
 
-    private validateSteamDir(steamDir: string): string | null {
-        const appInfoPath = path.join(this.normalizeSteamDir(steamDir), "appcache", "appinfo.vdf");
-        return fs.existsSync(appInfoPath) ? null : "Bad Steam Dir";
+    private validateSteamDir(_steamDir: string): string | null {
+        // Providers fail independently; an absent Steam install must not hide other libraries.
+        return null;
     }
 
-    private async loadGamesForDir(steamDir: string): Promise<SteamGameWithType[]> {
-        const normalizedSteamDir = this.normalizeSteamDir(steamDir);
-        const cachedGames = this.gamesCache.get(normalizedSteamDir);
-        if (cachedGames) {
-            return cachedGames;
-        }
-
-        const pendingLoad = this.pendingLoads.get(normalizedSteamDir);
-        if (pendingLoad) {
-            return pendingLoad;
-        }
-
-        const loadPromise = getSteamGamesWithTypes(normalizedSteamDir)
-            .then((games) => {
-                this.gamesCache.set(normalizedSteamDir, games);
-                this.pendingLoads.delete(normalizedSteamDir);
-                return games;
-            })
-            .catch((error) => {
-                this.pendingLoads.delete(normalizedSteamDir);
-                throw error;
+    private async loadGamesForDir(steamDir: string, libraries = selectedLibraries(undefined, this.provider)): Promise<SteamGameWithType[]> {
+        const key = JSON.stringify([this.normalizeSteamDir(steamDir), libraries]);
+        const cached = this.gamesCache.get(key);
+        if (cached && Date.now() - (this.loadedAt.get(key) || 0) < 30000) return cached;
+        const pending = this.pendingLoads.get(key);
+        if (pending) return pending;
+        const load = (async () => {
+            const results = await Promise.allSettled(libraries.map(async provider => {
+                if (provider === "epic") return discoverEpicGames(epicRoot());
+                if (provider === "battlenet") return discoverBattleNetGames({ icons: false });
+                if (!fs.existsSync(path.join(steamDir, "appcache", "appinfo.vdf"))) return { games: [], warnings: ["Steam library unavailable. Check the Steam folder."] };
+                return { games: await getSteamGamesWithTypes(steamDir), warnings: [] };
+            }));
+            const games: SteamGameWithType[] = [], warnings: string[] = [];
+            results.forEach((result, i) => {
+                if (result.status === "fulfilled") { games.push(...result.value.games); warnings.push(...result.value.warnings); }
+                else warnings.push(`${libraries[i]} library unavailable.`);
             });
-
-        this.pendingLoads.set(normalizedSteamDir, loadPromise);
-        return loadPromise;
+            this.libraryWarnings.set(key, warnings.join(" "));
+            const unique = [...new Map(games.map(game => [game.appid, game.appid.startsWith("battlenet:") && !game.icon ? { ...game, icon: EPIC_ICON_FALLBACK } : game])).values()].sort((a,b) => a.name.localeCompare(b.name) || a.appid.localeCompare(b.appid));
+            this.gamesCache.set(key, unique);
+            this.loadedAt.set(key, Date.now());
+            this.loadGameIcons(key, unique);
+            return unique;
+        })();
+        this.pendingLoads.set(key, load);
+        try { return await load; } finally { this.pendingLoads.delete(key); }
     }
 
     private getCustomFilter(filterId: string | null): CustomSteamFilter | null {
@@ -217,13 +304,14 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
             return;
         }
 
-        const allGames = await this.loadGamesForDir(contextData.steamDir);
+        const allGames = await this.loadGamesForDir(contextData.steamDir, contextData.libraries);
+        if (this.contexts.get(context) !== contextData) return;
+        const previousId = contextData.filteredGames[contextData.currentIndex]?.appid;
         const activeCustomFilter = this.getCustomFilter(contextData.selectedCustomFilterId);
         const selectedAppIds = activeCustomFilter ? new Set(activeCustomFilter.appids) : null;
 
         contextData.filteredGames = allGames.filter((game) => {
-            const normalizedType = this.normalizeGameType(game.type);
-            const matchesType = contextData.filters.some((filter) => normalizedType === filter || (filter === "game" && normalizedType === "demo"));
+            const matchesType = matchesSteamType(game, contextData.filters);
             if (!matchesType) {
                 return false;
             }
@@ -235,8 +323,11 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
             return selectedAppIds.has(game.appid);
         });
 
-        if (contextData.filteredGames.length > 0 && contextData.currentIndex >= contextData.filteredGames.length) {
-            contextData.currentIndex = contextData.currentIndex % contextData.filteredGames.length;
+        if (contextData.filteredGames.length > 0) {
+            const previousIndex = contextData.filteredGames.findIndex(game => game.appid === previousId);
+            if (previousIndex >= 0) contextData.currentIndex = previousIndex;
+            const count = contextData.filteredGames.length;
+            contextData.currentIndex = ((contextData.currentIndex % count) + count) % count;
         } else if (contextData.filteredGames.length === 0) {
             contextData.currentIndex = 0;
         }
@@ -245,6 +336,7 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
     }
 
     private updateWheelForContext(context: string): void {
+        this.stopLaunchAnimation(context);
         const contextData = this.contexts.get(context);
         if (!contextData) {
             return;
@@ -255,7 +347,8 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
                 prevGameIcon: { value: "" },
                 prevGameTitle: { value: "" },
                 currentGameIcon: { value: "" },
-                currentGameTitle: { value: "No games" },
+                currentGameTitle: { value: contextData.libraries.length ? "No games" : "Choose libraries" },
+                providerName: { value: "" },
                 nextGameIcon: { value: "" },
                 nextGameTitle: { value: "" }
             });
@@ -273,6 +366,7 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
             prevGameTitle: { value: prevGame.name },
             currentGameIcon: { value: currentGame.icon },
             currentGameTitle: { value: currentGame.name },
+            providerName: { value: {steam:"Steam",epic:"Epic",battlenet:"Battle.net"}[gameProvider(currentGame)] },
             nextGameIcon: { value: nextGame.icon },
             nextGameTitle: { value: nextGame.name }
         });
@@ -288,7 +382,9 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
             if (contextData.selectedCustomFilterId && !this.getCustomFilter(contextData.selectedCustomFilterId)) {
                 contextData.selectedCustomFilterId = null;
                 await contextData.dialAction.setSettings({
-                    customSteamDir: contextData.steamDir,
+                    ...contextData.settings,
+                    libraries: contextData.libraries, collectionSchema: 1,
+                    customSteamDir: contextData.settings.customSteamDir,
                     filteroptions: contextData.filters,
                     lastScrollIndex: contextData.currentIndex,
                     reverseDirection: contextData.reverseDirection,
@@ -296,6 +392,7 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
                 });
             }
 
+            contextData.steamDir = await this.getEffectiveSteamDir(contextData.settings.customSteamDir);
             await this.applyFiltersForContext(context);
         }
     }
@@ -305,15 +402,18 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
         dialAction: DialAction<FilterSettings>,
         settings: FilterSettings
     ): Promise<void> {
+        await this.globalSettingsReady;
         const filters = this.normalizeFilters(settings.filteroptions);
-        const steamDir = this.getEffectiveSteamDir(settings.customSteamDir);
-        const selectedCustomFilterId = settings.selectedCustomFilterId ?? null;
+        const steamDir = await this.getEffectiveSteamDir(settings.customSteamDir);
+        const selectedCustomFilterId = selectedCollectionId(settings.selectedCustomFilterId, this.provider, settings.collectionSchema);
 
         this.contexts.set(context, {
             dialAction,
+            libraries: selectedLibraries(settings.libraries, this.provider),
+            settings: { ...settings, collectionSchema: 1, selectedCustomFilterId },
             steamDir,
             filters,
-            currentIndex: typeof settings.lastScrollIndex === "number" ? settings.lastScrollIndex : 0,
+            currentIndex: Number.isSafeInteger(settings.lastScrollIndex) ? settings.lastScrollIndex! : 0,
             filteredGames: [],
             reverseDirection: settings.reverseDirection === true,
             selectedCustomFilterId: this.getCustomFilter(selectedCustomFilterId) ? selectedCustomFilterId : null
@@ -334,8 +434,8 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
         this.initializingContexts.set(context, true);
 
         try {
-            const settings = await dialAction.getSettings<FilterSettings>();
-            const steamDir = this.getEffectiveSteamDir(settings.customSteamDir);
+            const settings = ev.payload.settings;
+            const steamDir = await this.getEffectiveSteamDir(settings.customSteamDir);
             const validationError = this.validateSteamDir(steamDir);
 
             if (validationError) {
@@ -351,7 +451,8 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
             }
 
             await this.setContext(context, dialAction, {
-                customSteamDir: steamDir,
+                ...settings,
+                customSteamDir: settings.customSteamDir,
                 filteroptions: this.normalizeFilters(settings.filteroptions),
                 lastScrollIndex: settings.lastScrollIndex,
                 reverseDirection: settings.reverseDirection === true,
@@ -359,7 +460,9 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
             });
 
             await dialAction.setSettings({
-                customSteamDir: steamDir,
+                ...settings,
+                libraries: this.contexts.get(context)?.libraries, collectionSchema: 1,
+                customSteamDir: settings.customSteamDir,
                 filteroptions: this.contexts.get(context)?.filters ?? DEFAULT_FILTERS,
                 lastScrollIndex: this.contexts.get(context)?.currentIndex ?? 0,
                 reverseDirection: this.contexts.get(context)?.reverseDirection ?? false,
@@ -385,12 +488,15 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
         }
 
         const ticks = event.payload.ticks;
+        if (!Number.isSafeInteger(ticks) || ticks === 0) return;
         const delta = ticks * (contextData.reverseDirection ? 1 : -1);
         const count = contextData.filteredGames.length;
         contextData.currentIndex = ((contextData.currentIndex + delta) % count + count) % count;
 
         await dialAction.setSettings({
-            customSteamDir: contextData.steamDir,
+            ...contextData.settings,
+            libraries: contextData.libraries, collectionSchema: 1,
+            customSteamDir: contextData.settings.customSteamDir,
             filteroptions: contextData.filters,
             lastScrollIndex: contextData.currentIndex,
             reverseDirection: contextData.reverseDirection,
@@ -412,17 +518,40 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
         const currentGame = contextData.filteredGames[contextData.currentIndex];
         logger.info(`Launching game: ${currentGame.name}`);
 
+        if (this.launchPending.has(currentGame.appid)) return;
+        this.launchPending.add(currentGame.appid);
+        const animation = this.startLaunchAnimation(dialAction.id, contextData);
+        let launchFailed = false;
         try {
-            const { exec } = await import("child_process");
-            exec(`start steam://rungameid/${currentGame.appid}`, (err) => {
-                if (err) {
-                    logger.error(`Failed to launch game: ${err.message}`);
-                } else {
-                    logger.info(`Game launched successfully: ${currentGame.name}`);
-                }
-            });
+            const provider = gameProvider(currentGame);
+            if (provider === "epic") await launchEpicGame(currentGame as EpicGame);
+            else if (provider === "battlenet") await launchBattleNetGame(currentGame as BattleNetGame);
+            else {
+                if (!/^\d+$/.test(currentGame.appid)) throw new Error("Invalid Steam app ID.");
+                const script = "Start-Process -FilePath $env:GAME_SCROLLER_STEAM_URI -ErrorAction Stop";
+                await new Promise<void>((resolve,reject) => execFile("powershell.exe", ["-NoProfile","-NonInteractive","-Command",script],
+                    {windowsHide:true,timeout:15000,env:{...process.env,GAME_SCROLLER_STEAM_URI:`steam://rungameid/${currentGame.appid}`}}, error => error ? reject(error) : resolve()));
+            }
+            logger.info(`${provider} launch request sent.`);
         } catch (error) {
-            logger.error("Error executing game launch:", error);
+            logger.error("Error requesting game launch:", error);
+            if (this.launchAnimations.get(dialAction.id) === animation) {
+                this.stopLaunchAnimation(dialAction.id);
+                this.launchFeedbackUntil.set(dialAction.id, Date.now() + 3000);
+                launchFailed = true;
+                await dialAction.setFeedback({ currentGameIcon: { value: "" }, currentGameTitle: { value: "Check launcher" }, providerName: { value: "Launch failed" } });
+            }
+        } finally {
+            setTimeout(() => {
+                this.launchPending.delete(currentGame.appid);
+                // Restore the current selection, even if the dial moved during launch.
+                // A replaced/disappeared context must not receive stale feedback.
+                if (this.contexts.get(dialAction.id) === contextData &&
+                    (this.launchAnimations.get(dialAction.id) === animation ||
+                     (launchFailed && !this.launchAnimations.has(dialAction.id)))) {
+                    this.updateWheelForContext(dialAction.id);
+                }
+            }, 3000).unref();
         }
     }
 
@@ -430,7 +559,7 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
         const dialAction = ev.action as DialAction<FilterSettings>;
         const context = dialAction.id;
         const settings = ev.payload.settings;
-        const steamDir = this.getEffectiveSteamDir(settings.customSteamDir);
+        const steamDir = await this.getEffectiveSteamDir(settings.customSteamDir);
         const validationError = this.validateSteamDir(steamDir);
 
         if (validationError) {
@@ -458,12 +587,12 @@ export class SteamScroll extends SingletonAction<FilterSettings> {
             return;
         }
 
-        await dialAction.setSettings({
-            customSteamDir: contextData.steamDir,
-            filteroptions: contextData.filters,
-            lastScrollIndex: contextData.currentIndex,
-            reverseDirection: contextData.reverseDirection,
-            selectedCustomFilterId: contextData.selectedCustomFilterId
-        });
+        // Settings notifications must not write settings back: that can create an event loop.
+    }
+
+    override onWillDisappear(ev: WillDisappearEvent<FilterSettings>): void {
+        this.stopLaunchAnimation(ev.action.id);
+        this.contexts.delete(ev.action.id);
+        this.initializingContexts.delete(ev.action.id);
     }
 }

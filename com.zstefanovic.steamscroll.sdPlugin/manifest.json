@@ -1,48 +1,115 @@
 {
-	"Name": "Steamscroll",
-	"Version": "2.4.1.0",
-	"Author": "Zoran Stefanovic",
-	"Actions": [
-		{
-			"Name": "Steam Game Selector",
-			"UUID": "com.zstefanovic.steamscroll.dial",
-			"Tooltip": "Scroll through installed Steam games using the dial.",
-			"Icon": "imgs/actions/action_icon",
-			"PropertyInspectorPath": "ui/settings.html",
-			"SupportedInMultiActions": true,
-			"Controllers": [
-				"Encoder"
-			],
-			"Encoder": {
-				"layout": "GameWheelLayout.json"
-			},
-			"States": [
-				{
-					"Image": "imgs/actions/steamscroll",
-					"TitleAlignment": "middle",
-					"FontSize": 8
-				}
-			]
-		}
-	],
-	"Category": "Steamscroll",
-	"CategoryIcon": "imgs/plugin/category_icon",
-	"Icon": "imgs/plugin/category_icon",
-	"CodePath": "bin/plugin.js",
-	"Description": "Use the dial to browse through Steam games and press the dial to launch them. Requires Steam to be installed in the default location, games/software can be located anywhere.",
-	"SDKVersion": 3,
-	"Software": {
-		"MinimumVersion": "6.9"
-	},
-	"OS": [
-		{
-			"Platform": "windows",
-			"MinimumVersion": "10"
-		}
-	],
-	"Nodejs": {
-		"Version": "20",
-		"Debug": "enabled"
-	},
-	"UUID": "com.zstefanovic.steamscroll"
+  "Name": "Game Scroller",
+  "Version": "3.1.0.0",
+  "Author": "Zoran Stefanovic",
+  "Actions": [
+    {
+      "Name": "Game Scroller",
+      "UUID": "com.zstefanovic.steamscroll.dial",
+      "Tooltip": "Scroll through installed Steam games using the dial.",
+      "Icon": "imgs/plugin/pocket-pixel",
+      "PropertyInspectorPath": "ui/settings.html",
+      "SupportedInMultiActions": true,
+      "Controllers": [
+        "Encoder"
+      ],
+      "Encoder": {
+        "layout": "GameWheelLayout.json"
+      },
+      "States": [
+        {
+          "Image": "imgs/actions/game-scroller",
+          "TitleAlignment": "middle",
+          "FontSize": 8
+        }
+      ],
+      "VisibleInActionsList": false
+    },
+    {
+      "Name": "Game Scroller",
+      "UUID": "com.zstefanovic.steamscroll.epicdial",
+      "Tooltip": "Browse installed Epic Games games. Press to request launch through Epic Games Launcher.",
+      "Icon": "imgs/plugin/pocket-pixel",
+      "PropertyInspectorPath": "ui/epic-settings.html",
+      "SupportedInMultiActions": true,
+      "Controllers": [
+        "Encoder"
+      ],
+      "Encoder": {
+        "layout": "GameWheelLayout.json"
+      },
+      "States": [
+        {
+          "Image": "imgs/actions/game-scroller",
+          "TitleAlignment": "middle",
+          "FontSize": 8
+        }
+      ],
+      "VisibleInActionsList": false
+    },
+    {
+      "Name": "Game Scroller",
+      "UUID": "com.zstefanovic.steamscroll.librarydial",
+      "Tooltip": "Browse one or multiple launchers and shared collections. Press to request launch.",
+      "Icon": "imgs/plugin/pocket-pixel",
+      "PropertyInspectorPath": "ui/all-settings.html",
+      "SupportedInMultiActions": true,
+      "Controllers": [
+        "Encoder"
+      ],
+      "Encoder": {
+        "layout": "GameWheelLayout.json"
+      },
+      "States": [
+        {
+          "Image": "imgs/actions/game-scroller",
+          "TitleAlignment": "middle",
+          "FontSize": 8
+        }
+      ],
+      "VisibleInActionsList": true
+    },
+    {
+      "Name": "Game Scroller",
+      "UUID": "com.zstefanovic.steamscroll.battlenetdial",
+      "Tooltip": "Browse one or multiple launchers and shared collections. Press to request launch.",
+      "Icon": "imgs/plugin/pocket-pixel",
+      "PropertyInspectorPath": "ui/battlenet-settings.html",
+      "SupportedInMultiActions": true,
+      "Controllers": [
+        "Encoder"
+      ],
+      "Encoder": {
+        "layout": "GameWheelLayout.json"
+      },
+      "States": [
+        {
+          "Image": "imgs/actions/game-scroller",
+          "TitleAlignment": "middle",
+          "FontSize": 8
+        }
+      ],
+      "VisibleInActionsList": false
+    }
+  ],
+  "Category": "Game Scroller",
+  "CategoryIcon": "imgs/plugin/pocket-pixel",
+  "Icon": "imgs/plugin/game-scroller",
+  "CodePath": "bin/plugin.js",
+  "Description": "Browse Steam, Epic Games and Battle.net with configurable libraries and shared collections.",
+  "SDKVersion": 3,
+  "Software": {
+    "MinimumVersion": "6.9"
+  },
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "Nodejs": {
+    "Version": "20",
+    "Debug": "enabled"
+  },
+  "UUID": "com.zstefanovic.steamscroll"
 }

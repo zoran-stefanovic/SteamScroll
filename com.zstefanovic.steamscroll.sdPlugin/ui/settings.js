@@ -1409,9 +1409,16 @@ const streamDeck$1 = {
 };
 
 const streamDeck = streamDeck$1;
+const PROVIDER = ["steam", "epic", "battlenet", "all"].includes(document.body.dataset.provider) ? document.body.dataset.provider : "steam";
+const LIBRARIES = ["steam", "epic", "battlenet"];
+const LIBRARY_NAMES = {steam:"Steam", epic:"Epic Games", battlenet:"Battle.net"};
+const PROVIDER_NAME = "Game";
+const COLLECTION_KEY = "gameCollections";
 const DEFAULT_FILTERS = ["game", "tool", "application"];
 const DEFAULT_SETTINGS = {
     filteroptions: DEFAULT_FILTERS,
+    libraries: PROVIDER === "all" ? [...LIBRARIES] : [PROVIDER],
+    collectionSchema: 1,
     customSteamDir: "",
     selectedCustomFilterId: null
 };
@@ -1429,6 +1436,9 @@ const state = {
 const app = document.getElementById("app");
 function normalizeSettings(settings) {
     return {
+        ...settings,
+        libraries: Array.isArray(settings?.libraries) ? LIBRARIES.filter(id => settings.libraries.includes(id)) : (PROVIDER === "all" ? [...LIBRARIES] : [PROVIDER]),
+        collectionSchema: 1,
         filteroptions: Array.isArray(settings?.filteroptions) && settings.filteroptions.length > 0
             ? Array.from(new Set(settings.filteroptions.map((filter) => String(filter).toLowerCase().trim())))
             : [...DEFAULT_FILTERS],
@@ -1436,27 +1446,17 @@ function normalizeSettings(settings) {
         customSteamDir: typeof settings?.customSteamDir === "string" ? settings.customSteamDir : "",
         lastScrollIndex: typeof settings?.lastScrollIndex === "number" ? settings.lastScrollIndex : 0,
         selectedCustomFilterId: typeof settings?.selectedCustomFilterId === "string"
-            ? settings.selectedCustomFilterId
+            ? (PROVIDER === "epic" && settings.collectionSchema !== 1 ? `legacy-epic:${settings.selectedCustomFilterId}` : settings.selectedCustomFilterId)
             : null
     };
 }
 function normalizeGlobalSettings(settings) {
-    const customFilters = Array.isArray(settings?.customFilters)
-        ? settings.customFilters
-            .filter((filter) => {
-            return Boolean(filter &&
-                typeof filter.id === "string" &&
-                typeof filter.name === "string" &&
-                Array.isArray(filter.appids));
-        })
-            .map((filter) => ({
-            id: filter.id,
-            name: filter.name,
-            appids: filter.appids.map((appid) => String(appid)),
-            updatedAt: typeof filter.updatedAt === "string" ? filter.updatedAt : new Date(0).toISOString()
-        }))
-        : [];
-    return { customFilters };
+    const valid = value => Array.isArray(value) ? value.filter(f => f && typeof f.id === "string" && typeof f.name === "string" && Array.isArray(f.appids)).map(f => ({id:f.id,name:f.name,appids:f.appids.filter(id => typeof id === "string"),updatedAt:typeof f.updatedAt === "string" ? f.updatedAt : ""})) : [];
+    const legacy = [...valid(settings?.customFilters), ...valid(settings?.epicCustomFilters).map(f => ({...f,id:`legacy-epic:${f.id}`}))];
+    const merged = new Map(legacy.map(f => [f.id,f]));
+    for (const f of valid(settings?.gameCollections)) merged.set(f.id,f);
+    const deleted = Array.isArray(settings?.deletedGameCollections) ? settings.deletedGameCollections : [];
+    return {customFilters:[...merged.values()].filter(f => !deleted.includes(f.id))};
 }
 function escapeHtml(value) {
     return value
@@ -1484,18 +1484,18 @@ function getVisibleGames() {
         return state.installedGames;
     }
     return state.installedGames.filter((game) => {
-        return game.name.toLowerCase().includes(search) || game.type.toLowerCase().includes(search);
+        return game.name.toLowerCase().includes(search) || game.type.toLowerCase().includes(search) || (game.provider || "steam").includes(search);
     });
 }
-async function refreshInstalledGames() {
+async function refreshInstalledGames(force = false) {
     state.gamesLoading = true;
     state.gamesError = "";
     render();
-    const response = await streamDeck.plugin.fetch("/steam-games");
+    const response = await streamDeck.plugin.fetch({ path: `/${PROVIDER}-${force ? "refresh" : "games"}`, timeout: 20000 });
     if (!response.ok || !response.body) {
         state.installedGames = [];
         state.effectiveSteamDir = "";
-        state.gamesError = "Unable to load installed Steam games.";
+        state.gamesError = `Unable to load installed ${PROVIDER_NAME} games.`;
         state.gamesLoading = false;
         render();
         return;
@@ -1516,8 +1516,19 @@ async function persistSettings(patch, options) {
     }
 }
 async function persistGlobalFilters(filters) {
-    state.globalSettings = normalizeGlobalSettings({ customFilters: filters });
-    await streamDeck.settings.setGlobalSettings(state.globalSettings);
+    const previous = new Map(state.globalSettings.customFilters.map(f => [f.id,f]));
+    const latest = await streamDeck.settings.getGlobalSettings();
+    const nextIds = new Set(filters.map(f => f.id));
+    const removed = [...previous.keys()].filter(id => !nextIds.has(id));
+    const merged = new Map(normalizeGlobalSettings(latest).customFilters.map(f => [f.id,f]));
+    for (const id of removed) merged.delete(id);
+    for (const f of filters) if (JSON.stringify(f) !== JSON.stringify(previous.get(f.id))) merged.set(f.id,f);
+    const deleted = new Set(Array.isArray(latest?.deletedGameCollections) ? latest.deletedGameCollections : []);
+    for (const id of removed) deleted.add(id);
+    for (const f of filters) if (!previous.has(f.id)) deleted.delete(f.id);
+    const next = {...latest, [COLLECTION_KEY]:[...merged.values()], deletedGameCollections:[...deleted]};
+    state.globalSettings = normalizeGlobalSettings(next);
+    await streamDeck.settings.setGlobalSettings(next);
     render();
 }
 function openNewFilterEditor() {
@@ -1568,11 +1579,11 @@ async function saveEditor() {
     }
     const name = state.editor.name.trim();
     if (!name) {
-        window.alert("Please enter a filter name.");
+        window.alert("Please enter a collection name.");
         return;
     }
     if (state.editor.selectedAppIds.size === 0) {
-        window.alert("Please select at least one Steam game.");
+        window.alert("Please select at least one game or application.");
         return;
     }
     const filterId = state.editor.id ?? generateFilterId();
@@ -1595,7 +1606,7 @@ async function deleteFilter(filterId) {
     if (!filter) {
         return;
     }
-    if (!window.confirm(`Delete filter "${filter.name}"?`)) {
+    if (!window.confirm(`Delete collection "${filter.name}"?`)) {
         return;
     }
     const nextFilters = state.globalSettings.customFilters.filter((entry) => entry.id !== filterId);
@@ -1607,7 +1618,7 @@ async function deleteFilter(filterId) {
 function renderFilterCards() {
     const filters = getSortedFilters();
     if (filters.length === 0) {
-        return `<div class="muted">No custom filters yet.</div>`;
+        return `<div class="muted">No collections yet.</div>`;
     }
     return filters.map((filter) => {
         const isActive = (state.settings.selectedCustomFilterId ?? null) === filter.id;
@@ -1636,12 +1647,12 @@ function renderEditor() {
         <div class="screen">
             <div class="screen-header">
                 <button type="button" data-action="back-to-filters">Back</button>
-                <h2 class="screen-title">${state.editor.id ? "Edit filter" : "New filter"}</h2>
+                <h2 class="screen-title">${state.editor.id ? "Edit collection" : "New collection"}</h2>
             </div>
             <section class="section">
-                <div class="muted" style="margin-bottom:6px;">Filter name</div>
+                <div class="muted" style="margin-bottom:6px;">Collection name</div>
                 <input id="editor-name" type="text" value="${escapeHtml(state.editor.name)}" placeholder="Favorites, Co-op, Racing..." />
-                <div class="compact-note" style="margin-top:8px;">Use appids behind the scenes so renamed games stay linked.</div>
+                <div class="compact-note" style="margin-top:8px;">Choose games from any launcher. This dial shows the intersection of its libraries, Steam type filters and the selected collection.</div>
             </section>
             <section class="section">
                 <div class="muted" style="margin-bottom:6px;">Search installed games</div>
@@ -1654,14 +1665,14 @@ function renderEditor() {
                                 <label class="game-item">
                                     <input type="checkbox" data-action="toggle-game" data-appid="${escapeHtml(game.appid)}" ${state.editor?.selectedAppIds.has(game.appid) ? "checked" : ""} />
                                     <span class="game-name">${escapeHtml(game.name)}</span>
-                                    <span class="muted">${escapeHtml(game.type)}</span>
+                                    <span class="muted">${escapeHtml(LIBRARY_NAMES[game.provider || "steam"] || "Unknown")}  /  ${escapeHtml(game.type)}</span>
                                 </label>
                             `).join("")}
                 </div>
             </section>
             <div class="button-row">
                 <button type="button" data-action="back-to-filters">Cancel</button>
-                <button type="button" class="primary" data-action="save-filter">Save filter</button>
+                <button type="button" class="primary" data-action="save-filter">Save collection</button>
             </div>
         </div>
     `;
@@ -1671,16 +1682,16 @@ function renderFiltersView() {
         <div class="screen">
             <div class="screen-header">
                 <button type="button" data-action="back-to-main">Back</button>
-                <h2 class="screen-title">Custom filters</h2>
+                <h2 class="screen-title">Collections</h2>
             </div>
             <section class="section">
-                <div class="muted">Global filters stay available even if you remove or recreate a dial action.</div>
+                <div class="muted">Collections are shared across all launchers and remain available when a dial is removed.</div>
                 <div class="button-row" style="margin-top:10px;">
-                    <button type="button" class="primary" data-action="new-filter">New filter</button>
+                    <button type="button" class="primary" data-action="new-filter">New collection</button>
                 </div>
             </section>
             <section class="section">
-                <div class="muted" style="margin-bottom:6px;">Active custom filter on this dial</div>
+                <div class="muted" style="margin-bottom:6px;">Active collection on this dial</div>
                 <select id="active-filter">
                     <option value="">None</option>
                     ${getSortedFilters().map((filter) => `
@@ -1712,36 +1723,38 @@ function render() {
     app.innerHTML = `
         <div class="screen">
             <section class="section">
-                <h2>Steam library</h2>
-                <div class="muted">Set a custom Steam install directory if Steam is not located in the default folder.</div>
-                <div style="margin-top:10px;">
-                    <input id="steam-dir" type="text" value="${escapeHtml(state.settings.customSteamDir ?? "")}" placeholder="C:/Program Files (x86)/Steam" />
+                <h2>Libraries on this dial</h2>
+                <div class="checkbox-grid">
+                    ${LIBRARIES.map(id => `<label class="checkbox"><input type="checkbox" data-action="toggle-library" value="${id}" ${state.settings.libraries.includes(id) ? "checked" : ""} />${LIBRARY_NAMES[id]}</label>`).join("")}
                 </div>
-                <div class="status ${state.gamesError ? "error" : ""}">
-                    ${state.gamesLoading
-        ? "Loading installed Steam games..."
-        : state.gamesError
-            ? escapeHtml(state.gamesError)
-            : `${state.installedGames.length} installed games loaded from ${escapeHtml(state.effectiveSteamDir)}`}
-                </div>
+
+                <button type="button" id="refresh-library" ${state.gamesLoading ? "disabled" : ""}>Refresh library</button>
+                <label class="checkbox"><input id="reverse-direction" type="checkbox" ${state.settings.reverseDirection === true ? "checked" : ""} />Reverse scroll direction</label>
+                ${state.settings.libraries.includes("steam") ? `
+
+                <details style="margin-top:10px;"><summary>Advanced: fallback Steam folder</summary>
+                    <input id="steam-dir" type="text" value="${escapeHtml(state.settings.customSteamDir ?? "")}" placeholder="Automatic detection (recommended)" />
+                </details>
+                ` : ""}
+                ${state.gamesError ? `<div class="status error">${escapeHtml(state.gamesError)}</div>` : ""}
             </section>
             <section class="section">
-                <label class="checkbox"><input id="reverse-direction" type="checkbox" ${state.settings.reverseDirection === true ? "checked" : ""} />Reverse scroll direction</label>
-                <h2>Base filters</h2>
+
+                <h2>Steam type filters</h2><div class="muted">These apply only to Steam. Epic Games and Battle.net entries are unaffected.</div>
                 <div class="checkbox-grid">
                     ${DEFAULT_FILTERS.map((filter) => `
                         <label class="checkbox">
-                            <input type="checkbox" data-action="toggle-base-filter" value="${filter}" ${state.settings.filteroptions.includes(filter) ? "checked" : ""} />
+                            <input type="checkbox" data-action="toggle-base-filter" ${state.settings.libraries.includes("steam") ? "" : "disabled"} value="${filter}" ${state.settings.filteroptions.includes(filter) ? "checked" : ""} />
                             <span>${filter === "game" ? "Games (including demos)" : filter === "tool" ? "Tools" : "Applications"}</span>
                         </label>
                     `).join("")}
                 </div>
             </section>
             <section class="section">
-                <h2>Custom filter</h2>
-                <div class="muted">${selectedFilter ? `Active: ${escapeHtml(selectedFilter.name)}` : "No custom filter selected for this dial."}</div>
+                <h2>Collection</h2>
+                <div class="muted">${selectedFilter ? `Active: ${escapeHtml(selectedFilter.name)}` : "No collection selected for this dial."}</div>
                 <div class="button-row" style="margin-top:10px;">
-                    <button type="button" class="primary" data-action="manage-filters">Manage filters</button>
+                    <button type="button" class="primary" data-action="manage-filters">Manage collections</button>
                 </div>
             </section>
         </div>
@@ -1749,6 +1762,13 @@ function render() {
     bindEvents();
 }
 function bindEvents() {
+    document.querySelectorAll('input[data-action="toggle-library"]').forEach(checkbox => {
+        checkbox.addEventListener("change", async () => {
+            const libraries = Array.from(document.querySelectorAll('input[data-action="toggle-library"]:checked')).map(input => input.value);
+            await persistSettings({libraries,lastScrollIndex:0});
+        });
+    });
+    document.getElementById("refresh-library")?.addEventListener("click", () => void refreshInstalledGames(true));
     const reverse = document.getElementById("reverse-direction");
     reverse?.addEventListener("change", async () => {
         await persistSettings({ reverseDirection: reverse.checked });
@@ -1803,7 +1823,11 @@ function bindEvents() {
     const editorSearch = document.getElementById("editor-search");
     editorSearch?.addEventListener("input", () => {
         state.searchTerm = editorSearch.value;
+        const position = editorSearch.selectionStart;
         render();
+        const nextSearch = document.getElementById("editor-search");
+        nextSearch?.focus();
+        nextSearch?.setSelectionRange(position, position);
     });
     document.querySelectorAll('input[data-action="toggle-game"]').forEach((checkbox) => {
         checkbox.addEventListener("change", () => {

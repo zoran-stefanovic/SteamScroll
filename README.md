@@ -10,7 +10,7 @@
 
 Game Scroller, formerly **SteamScroll**, puts your installed games on the dial. Turn to choose a game, then press to launch it through its launcher.
 
-> **3.1 preview:** the visuals and multi-launcher features below show the upcoming Game Scroller 3.1 update. This update has been tested locally and is not yet available as a public release. The source on the default branch and existing downloads still represent the earlier SteamScroll version.
+> **Version 3.1.0.0:** the current source and installation package are available in this repository. The Elgato Marketplace listing still provides the earlier SteamScroll release; the rebranding and Marketplace update are pending.
 
 ## One dial, your libraries
 
@@ -46,12 +46,21 @@ Games must be installed locally. Launchers handle sign-in, updates and any requi
 
 ## Downloads
 
+- [Download Game Scroller 3.1.0.0](https://github.com/zoran-stefanovic/Game-Scroller/raw/refs/heads/main/com.zstefanovic.steamscroll.streamDeckPlugin)
+- [3.1.0.0 release notes](RELEASE-NOTES-3.1.0.0.md)
+
 
 - [Elgato Marketplace — existing SteamScroll release](https://marketplace.elgato.com/product/steamscroll-fac3f57d-db4b-4fbc-9131-a82a688c8036)
-- [GitHub releases](https://github.com/zoran-stefanovic/SteamScroll/releases)
+- [GitHub releases](https://github.com/zoran-stefanovic/Game-Scroller/releases)
 
 Download the `.streamDeckPlugin` package for the version you want, then double-click it to install it in Stream Deck.
 
+## Development
+
+Run `npm ci`, `npm run typecheck`, `npm test` and `npm run build`. Automated launch tests use mocks. The runtime requires `appinfoparser.exe` in the plugin bin folder; it is included in the installation package (a ZIP archive). Generated bin files and logs are not tracked. Extract the parser from the package into `com.zstefanovic.steamscroll.sdPlugin/bin/` before packaging a fresh checkout with the Elgato CLI.
+
+See [Battle.net implementation notes](BATTLE-NET.md) for launch limitations.
+
 ## Feedback
 
-[Report a problem or request a feature](https://github.com/zoran-stefanovic/SteamScroll/issues).
+[Report a problem or request a feature](https://github.com/zoran-stefanovic/Game-Scroller/issues).

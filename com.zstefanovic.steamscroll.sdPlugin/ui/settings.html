@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SteamScroll Settings</title>
+    <title>Game Scroller Settings</title>
     <style>
         :root {
             color-scheme: dark;
@@ -189,7 +189,7 @@
 
         .game-item {
             display: grid;
-            grid-template-columns: 18px 1fr auto;
+            grid-template-columns: 18px minmax(0, 1fr) auto;
             gap: 8px;
             align-items: center;
             padding: 6px 4px;
@@ -210,6 +210,8 @@
             font-size: 11px;
             color: var(--muted);
         }
+        .screen, .section, .screen-header { min-width: 0; }
+        .muted, .compact-note, .status { overflow-wrap: anywhere; }
     </style>
 </head>
 <body>

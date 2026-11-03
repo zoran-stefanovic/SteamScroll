@@ -2,13 +2,9 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import ts from 'typescript';
-const source=fs.readFileSync('src/actions/steamscroll.ts','utf8');
-const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,experimentalDecorators:true}}).outputText;
+import { load } from './load-ts.mjs';
 const sdk={SingletonAction:class{},action:()=>x=>x,logger:{createScope:()=>({info(){},error(){},warn(){}})},settings:{getGlobalSettings:async()=>({customFilters:[]}),onDidReceiveGlobalSettings(){}},ui:{onSendToPlugin(){}}};
-const module={exports:{}};
-vm.runInNewContext(js,{exports:module.exports,require:n=>n==='@elgato/streamdeck'?{...sdk,default:sdk}:n==='fs'?{existsSync:()=>true}:n==='path'?{join:(...a)=>a.join('/')}:n.includes('steam-games')?{}:{},console});
-const Plugin=module.exports.SteamScroll;
-const plugin=new Plugin(); await Promise.resolve();
+const { SteamScroll:Plugin }=load('src/actions/steamscroll.ts',{'@elgato/streamdeck':{...sdk,default:sdk},'../utils/steam-location':{findSteamDirectory:async p=>p||'C:/Program Files (x86)/Steam',clearSteamLocationCache(){}},'../utils/steam-games':{},'../utils/epic-games':{epicRoot:()=>''},'../utils/battlenet-games':{}});const plugin=new Plugin(); await Promise.resolve();
 const games=['game','demo','tool','application','unknown'].map((type,i)=>({appid:String(i),name:type,type,icon:''}));
 plugin.loadGamesForDir=async()=>games;
 const dial=id=>({id,saved:{},async setSettings(s){this.saved=JSON.parse(JSON.stringify(s));},async getSettings(){return this.saved;},async setFeedback(s){this.feedback=s;}});
@@ -30,7 +26,7 @@ for(const reverse of [undefined,false,true,'true']) for(const ticks of [-5,-2,-1
  await plugin.onDidReceiveSettings({action:a,payload:{settings:a.saved}});
  assert.equal(plugin.contexts.get('a').reverseDirection,reverse===true);
 }
-await plugin.onWillAppear({action:a}); assert.equal(plugin.contexts.get('a').reverseDirection,false);
+await plugin.onWillAppear({action:a,payload:{settings:a.saved}}); assert.equal(plugin.contexts.get('a').reverseDirection,false);
 plugin.globalSettings.customFilters=[{id:'empty',name:'Empty',appids:[],updatedAt:''}];
 await plugin.setContext('a',a,{filteroptions:['game'],selectedCustomFilterId:'empty'});
 await plugin.onDialRotate({action:a,payload:{ticks:5}}); assert.equal(plugin.contexts.get('a').currentIndex,0);

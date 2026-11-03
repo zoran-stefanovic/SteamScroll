@@ -1,0 +1,30 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import ts from 'typescript';
+const require = createRequire(import.meta.url), exports = {};
+vm.runInNewContext(ts.transpileModule(await fs.readFile('src/utils/epic-icons.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, require, process, Buffer });
+const root = await fs.mkdtemp(path.join(os.tmpdir(), 'game-scroller-icons-'));
+try {
+    const exe = path.join(root, "Nonstandard library's folder", 'game.exe'), cacheDir = path.join(root, 'cache');
+    await fs.mkdir(path.dirname(exe)); await fs.writeFile(exe, 'fixture only');
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
+    let calls = 0;
+    const options = { cacheDir, extract: async actual => { assert.equal(actual, exe); calls++; return png; } };
+    const results = await Promise.all([exports.getEpicIcon(exe, options), exports.getEpicIcon(exe, options)]);
+    assert(results.every(value => value === `data:image/png;base64,${png.toString('base64')}`)); assert.equal(calls, 1);
+    await exports.getEpicIcon(exe, options); assert.equal(calls, 1);
+    await fs.appendFile(exe, 'updated'); await exports.getEpicIcon(exe, options); assert.equal(calls, 2);
+    for (const file of await fs.readdir(cacheDir)) await fs.writeFile(path.join(cacheDir, file), 'corrupt');
+    await exports.getEpicIcon(exe, options); assert.equal(calls, 3);
+    const failure = { cacheDir: path.join(root, 'failure'), extract: async () => { throw new Error('unreadable icon'); } };
+    assert.equal(await exports.getEpicIcon(exe, failure), exports.EPIC_ICON_FALLBACK);
+    assert.equal(await exports.getEpicIcon(exe, { ...failure, extract: async () => Buffer.from('invalid') }), exports.EPIC_ICON_FALLBACK);
+    assert.equal(await exports.getEpicIcon(path.join(root, 'missing.exe'), options), exports.EPIC_ICON_FALLBACK);
+    assert.equal(await exports.getEpicIcon(exe, { cacheDir: exe, extract: async () => png }), results[0]);
+    assert.equal(await exports.getEpicIcon(exe, { ...failure, extract: async () => png }), results[0]);
+    console.log('PASS: actual icon cache success/dedup/invalidation/corruption, quoted nonstandard paths, extraction failure/retry, missing executable, unwritable cache and data-URI fallback.');
+} finally { await fs.rm(root, { recursive: true, force: true }); }
