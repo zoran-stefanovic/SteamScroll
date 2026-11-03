@@ -1,18 +1,59 @@
-[![Marketplace download badge](https://img.shields.io/badge/dynamic/json?logo=data:image/svg%2bxml;base64,PHN2ZyB3aWR0aD0iMjMwIiBoZWlnaHQ9IjIzMCIgdmlld0JveD0iMCAwIDIzMCAyMzAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik02My45NzEgMzguNDgzTDY0LjA5MSAzOC41NzNMMTA5LjY5MiA2NC43NzdDMTA3LjQ1MyA3Ny4yODUgMTAwLjg5NCA4OC43MTIgOTEuMTgzIDk2Ljk3NkM4MS4zMTYgMTA1LjM3MyA2OC43NDkgMTEwIDU1Ljc5MSAxMTBDNDEuMTU5IDExMCAyNy40MDMgMTA0LjI4IDE3LjA1IDkzLjg5MUM2LjcwMiA4My41MDIgMSA2OS42ODYgMSA1NUMxIDQwLjMxNCA2LjcwMiAyNi40OTggMTcuMDQ5IDE2LjEwOUMyNy4zOTYgNS43MiA0MS4xNTIgMCA1NS43OSAwQzY2Ljk3MSAwIDc3LjcyIDMuMzYxIDg2Ljg3OSA5LjcxMUM5NS44MjggMTUuOTE3IDEwMi42NzYgMjQuNTQxIDEwNi42OTEgMzQuNjU0QzEwNy4yMDEgMzUuOTUgMTA3LjY3NSAzNy4yODMgMTA4LjA4OSAzOC42MjFMOTguMzQ4IDQ0LjI4N0M5OC4wMTIgNDIuOTQzIDk3LjYxIDQxLjYwNCA5Ny4xNDggNDAuMzAyQzkwLjk0MiAyMi43NDcgNzQuMzE3IDEwLjk0NyA1NS43OSAxMC45NDdDMzEuNTkxIDEwLjk0NyAxMS45MDUgMzAuNzExIDExLjkwNSA1NUMxMS45MDUgNzkuMjg5IDMxLjU5MSA5OS4wNTMgNTUuNzkgOTkuMDUzQzY1LjE5NCA5OS4wNTMgNzQuMTYyIDk2LjEgODEuNzMgOTAuNTA3Qzg5LjE0MiA4NS4wMjcgOTQuNTc5IDc3LjUxOSA5Ny40NTQgNjguNzk5TDk3LjQ4NCA2OC42MDdMNDQuMzAyIDM4LjA2NFY3MS4xODJMNjIuNjM3IDYwLjU3N0w3Mi4wNzggNjUuOTkxTDQ0LjU5NiA4MS44ODlMMzQuODc5IDc2LjMzMVYzMi45NzRMNDQuNTg0IDI3LjM2Mkw2My45NzYgMzguNDg5TDYzLjk3IDM4LjQ4M0g2My45NzFaIiBmaWxsPSJ3aGl0ZSIvPgo8ZyBjbGlwLXBhdGg9InVybCgjY2xpcDBfMTFfNDU2KSI+CjxwYXRoIGQ9Ik0yMzAgOTBDMjMwIDEwMS4wNDYgMjIxLjA0NiAxMTAgMjEwIDExMEMyMDUuOTQyIDExMCAyMDIuMTY2IDEwOC43OTIgMTk5LjAxMyAxMDYuNzE1QzE5NS44NiAxMDQuNjM4IDE5My4zMjkgMTAxLjY5MiAxOTEuNzYyIDk4LjIxOUwxNzcuMjggNjYuMTMxQzE3Ni44ODggNjUuMjYzIDE3Ni4wMTYgNjQuNjU4IDE3NS4wMDEgNjQuNjU4QzE3My45ODYgNjQuNjU4IDE3My4xMTMgNjUuMjY0IDE3Mi43MjIgNjYuMTMzTDE1OC4yNCA5OC4yMTlDMTU1LjEwNSAxMDUuMTY2IDE0OC4xMTggMTEwIDE0MC4wMDEgMTEwQzEyOC45NTYgMTEwIDEyMC4wMDEgMTAxLjA0NiAxMjAuMDAxIDkwQzEyMC4wMDEgODUuOTQyIDEyMS4yMSA4Mi4xNjYgMTIzLjI4NyA3OS4wMTNDMTI1LjM2NCA3NS44NiAxMjguMzEgNzMuMzMgMTMxLjc4MyA3MS43NjJMMTYzLjg3MSA1Ny4yOEMxNjQuNzM5IDU2Ljg4OCAxNjUuMzQzIDU2LjAxNSAxNjUuMzQzIDU1QzE2NS4zNDMgNTMuOTg1IDE2NC43MzggNTMuMTEyIDE2My44NjkgNTIuNzIxTDEzMS43ODIgMzguMjM5QzEyNC44MzUgMzUuMTA0IDEyMCAyOC4xMTcgMTIwIDIwQzEyMCA4Ljk1NSAxMjguOTU1IDAgMTQwIDBDMTQ0LjA1OSAwIDE0Ny44MzUgMS4yMDkgMTUwLjk4OCAzLjI4NkMxNTQuMTQxIDUuMzYzIDE1Ni42NzEgOC4zMDggMTU4LjIzOSAxMS43ODJMMTcyLjcyMSA0My44N0MxNzMuMTEzIDQ0LjczOCAxNzMuOTg2IDQ1LjM0MiAxNzUgNDUuMzQyQzE3Ni4wMTQgNDUuMzQyIDE3Ni44ODkgNDQuNzM3IDE3Ny4yOCA0My44NjhMMTkxLjc2MiAxMS43ODJDMTk0Ljg5NyA0LjgzNSAyMDEuODg0IDAgMjEwIDBDMjIxLjA0NiAwIDIzMCA4Ljk1NSAyMzAgMjBDMjMwIDI0LjA1OCAyMjguNzkxIDI3LjgzNCAyMjYuNzE0IDMwLjk4OEMyMjQuNjM3IDM0LjE0MSAyMjEuNjkyIDM2LjY3MiAyMTguMjE5IDM4LjIzOUwxODYuMTMzIDUyLjcyMUMxODUuMjY0IDUzLjExMiAxODQuNjU4IDUzLjk4NSAxODQuNjU4IDU1QzE4NC42NTggNTYuMTQgMTg1LjM4NiA1Ni45NDMgMTg2LjEzMSA1Ny4yOEwyMTguMjE5IDcxLjc2MkMyMjUuMTY1IDc0Ljg5NyAyMzAgODEuODg0IDIzMCA5MFoiIGZpbGw9IiM0RERBNzkiLz4KPC9nPgo8cGF0aCBkPSJNMTIuNTAxIDEyNUM1LjU5NyAxMjUgMC4wMDEgMTMwLjU5NiAwLjAwMSAxMzcuNUMwLjAwMSAxNDQuNDA0IDUuNTk3IDE1MCAxMi41MDEgMTUwSDc1LjQyMkw5LjA5NCAxOTMuMjMzQzMuNjE5IDE5Ni44MDIgMCAyMDIuOTc4IDAgMjEwQzAgMjIxLjA0NiA4Ljk1NCAyMzAgMjAgMjMwQzI3LjAyMiAyMzAgMzMuMTk4IDIyNi4zOCAzNi43NjYgMjIwLjkwNkw4MC4wMDEgMTU0LjU3OVYyMTcuNUM4MC4wMDEgMjI0LjQwNCA4NS41OTcgMjMwIDkyLjUwMSAyMzBDOTkuNDA1IDIzMCAxMDUuMDAxIDIyNC40MDQgMTA1LjAwMSAyMTcuNVYxMjVIMTIuNTAxWiIgZmlsbD0iI0VBM0I5QyIvPgo8cGF0aCBkPSJNMTc3LjUgMTIwQzE0OC41MDUgMTIwIDEyNSAxNDMuNTA1IDEyNSAxNzIuNVYyMjVIMTc3LjVDMjA2LjQ5NSAyMjUgMjMwIDIwMS40OTUgMjMwIDE3Mi41QzIzMCAxNDMuNTA1IDIwNi40OTUgMTIwIDE3Ny41IDEyMFoiIGZpbGw9IiNGNEI2MzUiLz4KPGRlZnM+CjxjbGlwUGF0aCBpZD0iY2xpcDBfMTFfNDU2Ij4KPHJlY3Qgd2lkdGg9IjExMCIgaGVpZ2h0PSIxMTAiIGZpbGw9IndoaXRlIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxMjApIi8+CjwvY2xpcFBhdGg+CjwvZGVmcz4KPC9zdmc+Cg==&query=download_count&suffix=%20Downloads&label=Marketplace&labelColor=151515&color=204cfe&url=https%3A%2F%2Fmp-gateway.elgato.com%2Fproducts%2Ffac3f57d-db4b-4fbc-9131-a82a688c8036 "Marketplace download badge")](https://marketplace.elgato.com/product/steamscroll-fac3f57d-db4b-4fbc-9131-a82a688c8036)
+<p align="center">
+  <img src="docs/images/game-scroller-logo.png" alt="Game Scroller logo" width="112">
+</p>
 
-![steamscroll](https://github.com/user-attachments/assets/785783c1-e449-4110-bbc3-11677f364ac1)
+<h1 align="center">Game Scroller</h1>
+<p align="center">Turn. Choose. Play.</p>
+<p align="center">Browse your installed games with a Stream Deck + dial.</p>
 
-A plugin for the Stream Deck +. Allows you to scroll through your installed Steam games and launch them. 
+![Game Scroller on Stream Deck +](docs/images/game-scroller-dial.png)
 
-The plugin works on the dial/touchbar part of the Stream Deck +, the touchbar displays an 'action wheel' with installed games, use the dial to scroll through them and press the dial to launch game. 
+Game Scroller, formerly **SteamScroll**, puts your installed games on the dial. Turn to choose a game, then press to launch it through its launcher.
 
-![image](https://github.com/user-attachments/assets/e70786fe-d02c-4881-aaf7-23df0ff846e8)
-<img src="https://github.com/user-attachments/assets/4b674f75-3395-4554-93a9-06d30be04538" alt="alt text" width="200" height="200">
+> **3.1 preview:** the visuals and multi-launcher features below show the upcoming Game Scroller 3.1 update. This update has been tested locally and is not yet available as a public release. The source on the default branch and existing downloads still represent the earlier SteamScroll version.
 
+## One dial, your libraries
 
-Note: You can have Steam and the games installed in multiple locations/drives, if you have the base Steam install in a different location than the default folder (C:\Program Files (x86)\Steam) you will have to provide that path in the 'custom steam directory' field located in the settings window.  
+The new **Game Scroller** action brings **Steam**, **Epic Games** and **Battle.net** together. Select all three, any combination, or just one launcher. Each dial keeps its own selection, collection and scroll direction.
 
+- **Automatic Steam detection:** Steam's registered installation and library folders are found automatically, including libraries on other drives.
+- **Local discovery:** Epic and Battle.net games are read from local installation records.
+- **Progressive icons:** browse the library while game icons load in the background.
+- **Launch feedback:** a loading animation appears while the launch request is sent.
 
-Install:
-1. Download latest release.
-2. Double-click and Streamdeck software should add it automatically.
+## Choose your libraries
+
+Select the launchers to show, refresh the library, or reverse the scroll direction. Steam type filters apply only to Steam games, tools and applications. An optional Steam-folder fallback is available under Advanced.
+
+<p align="center">
+  <img src="docs/images/game-scroller-settings.png" alt="Game Scroller settings: launcher selection, reverse scrolling, Steam type filters and collections" width="480">
+</p>
+
+## Keep your favorites together
+
+Create a collection containing games from different launchers. A dial shows games that match both its selected libraries and its chosen collection.
+
+<p align="center">
+  <img src="docs/images/game-scroller-collections.png" alt="A shared collection with games from Steam, Epic Games and Battle.net" width="480">
+</p>
+
+<sub>Settings previews use an example collection. The device visual is a promotional mock-up based on the real device.</sub>
+
+## Launcher support
+
+Games must be installed locally. Launchers handle sign-in, updates and any required prompts. Battle.net launch codes are supported on a best-effort basis; sending a request does not guarantee that a game has finished starting. No account credentials are collected by Game Scroller.
+
+The 3.1 update requires **Windows 10 or later**, **Stream Deck 6.9 or later** and a **Stream Deck +**.
+
+## Downloads
+
+The existing public release is still listed under **SteamScroll**. It does not include the multi-launcher features shown in the 3.1 preview above.
+
+- [Elgato Marketplace — existing SteamScroll release](https://marketplace.elgato.com/product/steamscroll-fac3f57d-db4b-4fbc-9131-a82a688c8036)
+- [GitHub releases](https://github.com/zoran-stefanovic/SteamScroll/releases)
+
+Download the `.streamDeckPlugin` package for the version you want, then double-click it to install it in Stream Deck.
+
+## Feedback
+
+[Report a problem or request a feature](https://github.com/zoran-stefanovic/SteamScroll/issues).
